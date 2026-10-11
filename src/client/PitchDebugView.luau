@@ -4,6 +4,8 @@
 -- the trajectory, and shows speed / flight time / targeting error in a HUD.
 -- Also compares the client's locally simulated crossing with the server's
 -- authoritative one ("sync" line) to verify replication consistency.
+-- Other systems (batting) add HUD sections and world drawings through
+-- setSection / getWorldFolder so they share the same toggle.
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -30,6 +32,9 @@ local visible = true
 local pitchFolders: { Folder } = {}
 local lastFlights: { [string]: Pitch.Flight } = {}
 local hudLines: { [string]: string } = {}
+local sections: { [string]: string } = {}
+local sectionOrder: { string } = {}
+local started = false
 
 local function marker(parent: Instance, name: string, position: Vector3, size: number, color: Color3, transparency: number?): Part
 	local part = Instance.new("Part")
@@ -91,14 +96,21 @@ local function drawZone(laneId: string, geometry: LaneGeometry.Geometry)
 	folder.Parent = root
 end
 
-local function setHud(laneId: string, text: string)
-	hudLines[laneId] = text
+local function renderHud()
 	local lines = {}
 	for id, line in hudLines do
 		table.insert(lines, `<b>{id}</b>  {line}`)
 	end
 	table.sort(lines)
+	for _, key in sectionOrder do
+		table.insert(lines, sections[key])
+	end
 	hudLabel.Text = `<b>PITCH DEBUG</b> ({cfg.ToggleKey} to toggle)\n` .. table.concat(lines, "\n")
+end
+
+local function setHud(laneId: string, text: string)
+	hudLines[laneId] = text
+	renderHud()
 end
 
 local function describe(geometry: LaneGeometry.Geometry, flight: Pitch.Flight): string
@@ -198,10 +210,32 @@ local function setVisible(value: boolean)
 	screenGui.Enabled = visible
 end
 
+function PitchDebugView.isEnabled(): boolean
+	return started
+end
+
+-- Extra HUD text below the pitch lines (RichText allowed). No-op when disabled.
+function PitchDebugView.setSection(key: string, text: string)
+	if not started then
+		return
+	end
+	if sections[key] == nil then
+		table.insert(sectionOrder, key)
+	end
+	sections[key] = text
+	renderHud()
+end
+
+-- Folder for debug geometry; hidden together with the overlay. nil when disabled.
+function PitchDebugView.getWorldFolder(): Folder?
+	return if started then root else nil
+end
+
 function PitchDebugView.start()
 	if not (RunService:IsStudio() and cfg.Enabled) then
 		return
 	end
+	started = true
 
 	root = Instance.new("Folder")
 	root.Name = "PitchDebug"

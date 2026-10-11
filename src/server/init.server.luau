@@ -1,5 +1,5 @@
 --!strict
--- Server entry point: authoritative pitching + batter placement.
+-- Server entry point: authoritative pitching, batting and batter placement.
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
@@ -7,6 +7,7 @@ local RunService = game:GetService("RunService")
 local PitchConfig = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Pitching"):WaitForChild("PitchConfig"))
 
 local BatterService = require(script.BatterService)
+local BattingServer = require(script.BattingServer)
 local PitchServer = require(script.PitchServer)
 
 if RunService:IsStudio() and PitchConfig.Debug.Enabled and PitchConfig.Debug.RunTestsOnStart then
@@ -22,4 +23,5 @@ if RunService:IsStudio() and PitchConfig.Debug.Enabled and PitchConfig.Debug.Run
 end
 
 PitchServer.start()
+BattingServer.start()
 BatterService.start()

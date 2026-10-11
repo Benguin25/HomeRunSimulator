@@ -40,6 +40,7 @@ export type PitchPlayback = typeof(setmetatable(
 		spinAxis: Vector3,
 		spinRate: number, -- visual rad/s
 		finished: boolean,
+		cutTime: number, -- server time the ball disappears early (bat contact); math.huge = never
 	},
 	PitchPlayback
 ))
@@ -67,6 +68,7 @@ function PitchPlayback.new(geometry: LaneGeometry.Geometry, flight: Pitch.Flight
 		spinAxis = if spin.Magnitude > 1e-6 then spin.Unit else geometry.right,
 		spinRate = spin.Magnitude * ballConfig.VisualSpinRpmScale,
 		finished = false,
+		cutTime = math.huge,
 	}, PitchPlayback)
 	;(self.ball :: BallVisual.BallVisual):setTransparency(1)
 	return self
@@ -108,6 +110,10 @@ end
 function PitchPlayback.update(self: PitchPlayback, serverNow: number): boolean
 	local ball = self.ball
 	if self.finished or ball == nil then
+		return false
+	end
+	if serverNow >= self.cutTime then
+		self:destroy()
 		return false
 	end
 	local data = self.flight.data
@@ -164,6 +170,16 @@ function PitchPlayback.update(self: PitchPlayback, serverNow: number): boolean
 
 	self:destroy()
 	return false
+end
+
+-- Ends the playback at a server time (the bat hit the ball). Earlier cuts win.
+function PitchPlayback.cutAt(self: PitchPlayback, serverTime: number)
+	self.cutTime = math.min(self.cutTime, serverTime)
+end
+
+-- Cancels a pending cut (a predicted contact the server did not confirm).
+function PitchPlayback.clearCut(self: PitchPlayback)
+	self.cutTime = math.huge
 end
 
 function PitchPlayback.destroy(self: PitchPlayback)

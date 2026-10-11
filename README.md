@@ -63,3 +63,96 @@ One `PitchEvent` message is sent per pitch at windup start. It carries the relea
 
 ### Difficulty tiers and pacing
 `PitchConfig.Difficulty.Tiers` defines `Beginner` (50-55 mph, 1.6 s windup), `Intermediate` (64-72 mph) and `Advanced` (78-85 mph, the original tuning). `PitchConfig.Difficulty.Active` selects the tier (default `Beginner`); it sets both the real release speed the solver targets and the windup/ready timing. Pitch types add a `SpeedOffsetMph` on top of the tier. There is no per-player progression yet.
+
+## Phase 2: Batting
+
+### Layout
+
+| Path | Runs on | Purpose |
+| --- | --- | --- |
+| `src/shared/Batting/BattingConfig.luau` | both | All batting tunables: aim region, bat geometry, swing timing/arc, quality weights, network limits, presentation |
+| `src/shared/Batting/SwingModel.luau` | both | Swing state machine, analytic bat pose vs. server time, aim/ray projection |
+| `src/shared/Batting/BatCollision.luau` | both | Swept bat (two capsules) vs. moving ball, earliest contact (conservative advancement) |
+| `src/shared/Batting/ContactQuality.luau` | both | Contact measurements, quality factors/score/label, `ContactResult` for Phase 3 |
+| `src/shared/Batting/SwingResolver.luau` | both | Resolves one swing against one pitch flight (server: authoritative, client: prediction) |
+| `src/shared/Batting/SwingValidator.luau` | server | Request sanitizing, duplicates, flood guard, aim bounds, timestamp/rewind limits, cooldown, one swing per pitch |
+| `src/shared/Batting/BattingNet.luau` | both | Remote names and the result payload type |
+| `src/server/BattingServer.luau` | server | Receives swings, validates, resolves, ends hit pitches, broadcasts results |
+| `src/client/BattingController.luau` | client | Mouse aim, left-click swing, local state machine, prediction + reconciliation |
+| `src/client/BattingPresentation.luau` | client | Bat model, reticle, quality label, sounds, impact effects, temporary deflection |
+| `src/client/BattingDebugView.luau` | client | Batting section of the F7 debug overlay |
+
+### How a swing works
+1. **Aim.** Each frame the mouse is turned into a camera ray (`Camera:ViewportPointToRay`) and intersected with the *contact plane* (parallel to the strike-zone plane, `ContactPlaneOffsetMeters` in front of it). The result is clamped to the aim region. The reticle is that 3D point projected back to the screen and is sized to the barrel's real vertical reach, so it is exact at any resolution or aspect ratio. Aim is never streamed to the server.
+2. **Swing.** A left click (only when the previous swing has fully recovered) stamps the click with `GetServerTimeNow()`, starts the bat immediately and sends `(seq, clickTime, aimX, aimY, pitchId)`. Phases: Ready → Windup (0.05 s) → Active (0.11 s) → FollowThrough → Recovery → Ready. Everything is a pure function of server time, so it doesn't depend on frame rate.
+3. **Bat geometry.** The bat is a handle capsule plus a barrel capsule that rotate about the batter's body axis in a slightly tilted swing plane. The pivot is placed so the sweet spot lands exactly on the aim point when the bat is square, so aim positions the whole swing path. During Active the angle advances at a constant rate, so the collision volume is exact. The rendered bat uses the same dimensions and pose function.
+4. **Collision.** The server samples the stored 240 Hz trajectory (Hermite) over the overlap of the Active window and the flight. Conservative advancement steps by `gap / maxRelativeSpeed`, which provably cannot skip a contact at any speed, and returns the earliest touch (0.5 mm tolerance). There are no `Touched` events.
+5. **Quality.** Four measured factors are each mapped to 0..1 and multiplied (weights configurable): timing (bat square time minus the time the ball reaches the aim plane), distance from the sweet spot along the bat, vertical offset from the bat axis, and collision efficiency (closing speed / relative speed). The score maps to Perfect / Great / Good / Weak; no contact is a Miss (Early / Late / Over / Under / Inside / Outside). Early contact pulls the ball and late contact pushes it, via the impact normal.
+6. **Result.** On contact the server ends the pitch (`PitchServer.resolveContact`, Abort reason `Contact` with the contact time, so every client hides the ball exactly at contact), and the result is broadcast. The swinging client has already shown predicted effects using the same deterministic resolver. It replaces them with the server's result and puts the ball back if the server disagrees.
+
+### Phase 3 hand-off
+`ContactQuality.ContactResult` (in `SwingResultPayload.contact`) has these fields:
+- Timing and position: contact time, time after release, contact point, ball center, bat axis point.
+- Collision: impact normal, ball velocity, bat surface velocity, relative velocity, closing speed.
+- Where it hit the bat: segment, distance from knob, sweet-spot offset, vertical offset.
+- Swing: bat direction, swing direction, bat angle, timing error.
+- Direction hints: spray-angle and launch-angle hints taken from the impact normal.
+- Grading: factors, score and label.
+
+Positions and speeds are in studs. The current deflection (`Presentation.TemporaryDeflection`) is a clearly temporary visual and produces no distance.
+
+### Networking and validation
+- **Requests** carry intent only. The server parses them strictly and rejects non-numbers, NaN/inf, non-integer or old sequence numbers, and aim outside the region. It also rate-limits floods (80 ms) and enforces the swing cooldown and one swing per pitch.
+- **Latency compensation:** the click stamp may be rewound at most `min(0.25 s, ping + 0.06 s)`. Older stamps are clamped forward (the swing becomes later), stamps older than 1 s are rejected, and future stamps beyond 50 ms of clock noise are rejected. The ball position always comes from the server's own stored trajectory.
+- **Practice swings:** swings whose Active window does not overlap the flight are accepted but don't use up the pitch.
+
+### Tuning (beginner defaults, 50–55 mph)
+Against the authoritative trajectory, with aim exactly on the ball:
+- **Timing:** contact happens for timing errors of roughly ±60 ms, and Perfect is about ±20 ms.
+- **Vertical:** contact is possible within about ±9 cm, which is the barrel radius plus the ball radius. The barrel collision radius is 5.5 cm for readability (a real barrel is about 3.3 cm).
+- **Bat speed:** the sweet spot moves at about 47 mph.
+
+Widen the windows with `Swing.ActiveSeconds` / angles, `Bat.BarrelRadiusMeters` and `Quality.*`.
+
+### Tests
+`Batting.spec` and `SwingValidation.spec` cover:
+- perfect contact, early and late swings, wrong aim, swings that don't overlap the flight;
+- frame-rate independence, millimeter bat-boundary contact, and 300 mph tunneling (with a check that a naive 60 Hz test does miss);
+- sweep vs. brute force;
+- duplicate and invalid requests, latency limits, cooldown and flood guard, one swing per pitch;
+- pitch cleanup after contact.
+
+### Playtesting batting in Studio
+1. Press Play. The OS cursor is replaced by a ring reticle with a faint line showing where the barrel will be, and a faint strike-zone outline is drawn on the contact plane.
+2. Move the mouse to put the ring where the ball will cross, then left-click as it arrives. The bat swings immediately.
+3. A connected swing plays a crack, a flash, sparks and a short deflection, and the label shows the quality plus timing and sweet-spot detail. A miss shows the miss reason.
+4. Press F7. The overlay shows the swing state, aim, server validation (rewind, clamping, rejections), the factors, bat and ball speeds, and whether the client prediction matched. It also draws the bat capsules at contact, the swept tip and sweet-spot path, and the contact point.
+5. Output lines starting with `[Batting]` log every swing with its server outcome.
+
+## Phase 2.5: bat alignment and miss feedback
+
+### Visible bat
+- `src/shared/Batting/BatStance.luau` decides the bat that is drawn. During the Active window it is exactly `SwingModel.activePoseAt`, the same function the collision sweep uses, so the barrel you see is the barrel that hits.
+- Every other phase carries the bat to or from that pose and is continuous at each hand-off:
+
+| Phase | Where the bat is |
+| --- | --- |
+| Ready | In the batter's hands, raised over the rear shoulder, drifting `Stance.PreloadFraction` of the way toward the aimed swing |
+| Windup | Carried from the on-screen pose into the first collision pose |
+| Follow-through | The swing continuing about the same pivot |
+| Recovery | Carried back to the hands |
+
+- `src/shared/Batting/ArmIK.luau` is a pure two-bone solver over the rig's Motor6D offsets, and `src/client/CharacterGrip.luau` applies it to the local R15 character every frame. The rear arm is the top hand and the front arm is the bottom hand. Targets are `Stance.GripBottomMeters` and `Stance.GripTopMeters` up the handle. A target the arm can't reach clamps to a straight arm pointing at it. R6 or missing rigs skip the arms, and the bat starts from a fallback anchor near the batter marker. Turn the arms off with `Stance.ArmIK = false`.
+- Collision geometry, timing, windows and quality thresholds are unchanged. The Phase 2 collision tests still pass untouched.
+
+### Miss reasons
+`MissClassifier.luau` looks at the simulated swing and the ball's real path, not the screen, and no longer uses the old 60 ms cutoff.
+1. For the three mistakes (timing, vertical aim, lateral aim) it measures the error against where the ball crossed the contact plane. Each error is scaled by the same tolerance the quality score uses.
+2. It re-runs the real collision sweep with each mistake corrected on its own, and reports the largest error among the corrections that would have connected. If no single correction works, it uses the largest error overall.
+3. The reasons are Early, Late (timing), Over, Under (vertical aim: Over = aimed above the ball, Under = below) and Inside, Outside (lateral aim: the ball was closer in or farther out than the bat reached).
+4. Misses carry an amount: seconds for Early/Late, studs for the rest. The label shows a headline (TOO EARLY, OVER THE BALL, and so on) and a hint such as "swing a little later (~45 ms)" or "aim lower (~6 cm)".
+5. Swings whose Active window never overlaps the flight (more than about 100 ms late) remain practice swings with no label.
+
+### Tests
+- `BatAlignment.spec`: the drawn bat equals the collision pose while Active; the bat never snaps between phases; the bat starts at the hands; the drawn barrel overlaps the drawn ball at contact; frame-rate independence; arm IK reaches its target and clamps out-of-reach ones.
+- `MissClassification.spec`: pure timing and aim cases, the playtest regression (55 ms early with a slightly low aim now reads Early, not Under), and a randomized check that every blamed mistake, once fixed, really connects.

@@ -123,9 +123,14 @@ local function onPitchEvent(kind: string, ...: any)
 			task.spawn(listener, info)
 		end
 	elseif kind == PitchNet.Messages.Abort then
-		local laneId, pitchId, reason = ...
+		local laneId, pitchId, reason, atTime = ...
 		if playbackPitchIds[laneId] == pitchId then
-			stopPlayback(laneId)
+			if typeof(atTime) == "number" then
+				-- Bat contact: the ball stays visible until the bat reaches it.
+				playbacks[laneId]:cutAt(atTime)
+			else
+				stopPlayback(laneId)
+			end
 		end
 		for _, listener in abortListeners do
 			task.spawn(listener, laneId, pitchId, reason)
@@ -175,6 +180,28 @@ end
 
 function PitchVisualController.getGeometry(laneId: string): LaneGeometry.Geometry?
 	return geometries[laneId]
+end
+
+-- The flight currently rendered on a lane (batting prediction samples it).
+function PitchVisualController.getActiveFlight(laneId: string): Pitch.Flight?
+	local playback = playbacks[laneId]
+	return playback and playback.flight
+end
+
+-- Hide the ball at `atTime` (server time); used by locally predicted contact.
+function PitchVisualController.cutPitch(laneId: string, pitchId: number, atTime: number)
+	local playback = playbacks[laneId]
+	if playback and playbackPitchIds[laneId] == pitchId then
+		playback:cutAt(atTime)
+	end
+end
+
+-- Undo a predicted cut, if the ball is still being rendered.
+function PitchVisualController.uncutPitch(laneId: string, pitchId: number)
+	local playback = playbacks[laneId]
+	if playback and playbackPitchIds[laneId] == pitchId then
+		playback:clearCut()
+	end
 end
 
 function PitchVisualController.onGeometry(listener: Listener<string, LaneGeometry.Geometry>)

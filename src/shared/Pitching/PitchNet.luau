@@ -8,7 +8,8 @@
 --   * PitchEvent (server -> client), one message per lifecycle event:
 --       ("Start",  encodedPitch)                     at windup start (includes release time)
 --       ("Result", laneId, pitchId, isStrike, crossPosition?)  when the ball crosses the plane
---       ("Abort",  laneId, pitchId, reason)          pitch cancelled
+--       ("Abort",  laneId, pitchId, reason, atTime?) pitch cancelled; atTime (server time,
+--                                                    bat contact) = keep showing the ball until then
 --   * GetActivePitches (client -> server RemoteFunction) for late joiners.
 
 local PitchNet = {}

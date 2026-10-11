@@ -27,6 +27,7 @@ type LaneRecord = {
 	resolved: MarkerResolver.ResolvedLane,
 	lane: PitchLane.PitchLane,
 	folder: Folder,
+	contactTime: number?, -- set only while a contact abort is being broadcast
 }
 
 local lanes: { [string]: LaneRecord } = {}
@@ -154,7 +155,8 @@ local function createLane(resolved: MarkerResolver.ResolvedLane, lanesFolder: Fo
 			)
 		end,
 		onPitchAborted = function(_lane, active, reason)
-			pitchEvent:FireAllClients(PitchNet.Messages.Abort, resolved.id, active.data.id, reason)
+			-- contactTime (bat contact) lets clients keep the ball visible until the bat reaches it.
+			pitchEvent:FireAllClients(PitchNet.Messages.Abort, resolved.id, active.data.id, reason, record.contactTime)
 		end,
 	})
 
@@ -232,6 +234,20 @@ end
 function PitchServer.getActivePitch(laneId: string): PitchLane.ActivePitch?
 	local record = lanes[laneId]
 	return record and record.lane.pitch
+end
+
+-- Ends a pitch because the bat hit it (Phase 2). Clients stop the ball at
+-- `contactTime` (server time). Returns false if that pitch is no longer active.
+function PitchServer.resolveContact(laneId: string, pitchId: number, contactTime: number, reason: string): boolean
+	local record = lanes[laneId]
+	local active = record and record.lane.pitch
+	if not record or not active or active.data.id ~= pitchId then
+		return false
+	end
+	record.contactTime = contactTime
+	local aborted = record.lane:abortPitch(now(), reason)
+	record.contactTime = nil
+	return aborted
 end
 
 return PitchServer

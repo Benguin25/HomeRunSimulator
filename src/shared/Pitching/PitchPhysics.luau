@@ -205,6 +205,21 @@ function PitchPhysics.simulate(
 	return traj
 end
 
+-- First crossing of an arbitrary plane by a stored trajectory (same scan +
+-- bisection as the strike-zone crossing). Used by batting for the ball's
+-- arrival at the contact plane.
+function PitchPhysics.findPlaneCrossing(traj: Trajectory, plane: Plane): Crossing?
+	local previous = PitchPhysics.signedDistance(plane, traj.positions[1])
+	for i = 1, traj.count - 1 do
+		local distance = PitchPhysics.signedDistance(plane, traj.positions[i + 1])
+		if previous < 0 and distance >= 0 then
+			return refineCrossing(traj, i, plane)
+		end
+		previous = distance
+	end
+	return nil
+end
+
 -- Position at time t (seconds after release). Clamped to the trajectory.
 function PitchPhysics.sample(traj: Trajectory, t: number): Vector3
 	if t <= 0 then
