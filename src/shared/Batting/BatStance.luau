@@ -115,6 +115,19 @@ function BatStance.visualPoseAt(
 	return BatStance.blend(SwingModel.poseAt(swing, phaseStart), readyPose, smoothstep(u), length)
 end
 
+-- Waist rotation (radians about world up) for a bat angle: follows the swing,
+-- 0 at the resting angle, capped. Positive turns the chest toward the pitcher
+-- for either batting side.
+function BatStance.torsoYaw(batAngle: number): number
+	local cfg = BattingConfig.Stance
+	local rest = math.rad(BattingConfig.Swing.RestAngleDegrees)
+	local yaw = cfg.TorsoYawGain * (batAngle - rest)
+	local limit = math.rad(cfg.MaxTorsoYawDegrees)
+	-- Rotation about the swing axis; the axis points up for a right-handed
+	-- batter and down for a left-handed one.
+	return math.clamp(yaw, -limit, limit) * -SwingModel.batterSideSign()
+end
+
 -- World points where the two hands grip the handle for a bat pose.
 function BatStance.gripPoints(geometry: LaneGeometry.Geometry, pose: SwingModel.Pose): (Vector3, Vector3)
 	local cfg = BattingConfig.Stance

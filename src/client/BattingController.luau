@@ -165,7 +165,12 @@ local function onRender(dt: number)
 	updateAim(dt)
 
 	-- The resting bat lives in the character's hands and drifts toward the aim.
+	-- The body follows the swing pivot (the swing's own while swinging, so it
+	-- holds still mid-swing; the aimed one while waiting).
 	CharacterGrip.ensureBound(localPlayer.Character)
+	local activeSwing = currentSwing
+	local swinging = activeSwing ~= nil and not SwingModel.isReadyAt(activeSwing, now)
+	CharacterGrip.step(geo, if swinging and activeSwing then activeSwing.pivot else SwingModel.pivotFor(geo, aimX, aimY), dt)
 	local anchor = CharacterGrip.getAnchor(geo) or BatStance.fallbackAnchor(geo)
 	local length = SwingModel.dimensions(geo).length
 	local restTarget = BatStance.readyPose(geo, anchor, aimX, aimY)
@@ -185,7 +190,7 @@ local function onRender(dt: number)
 
 	updatePending(now)
 	BattingPresentation.update()
-	BattingDebugView.updateLive(geo, phase, aimX, aimY, aimClamped)
+	BattingDebugView.updateLive(geo, phase, aimX, aimY, aimClamped, CharacterGrip.describe(geo))
 end
 
 local function trySwing()

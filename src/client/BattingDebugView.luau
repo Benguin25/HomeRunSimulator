@@ -65,7 +65,14 @@ function BattingDebugView.isEnabled(): boolean
 end
 
 -- Throttled per-frame line: swing state and current aim.
-function BattingDebugView.updateLive(geometry: LaneGeometry.Geometry?, phase: string, aimX: number, aimY: number, clamped: boolean)
+function BattingDebugView.updateLive(
+	geometry: LaneGeometry.Geometry?,
+	phase: string,
+	aimX: number,
+	aimY: number,
+	clamped: boolean,
+	gripStatus: string?
+)
 	if not PitchDebugView.isEnabled() then
 		return
 	end
@@ -82,11 +89,12 @@ function BattingDebugView.updateLive(geometry: LaneGeometry.Geometry?, phase: st
 	PitchDebugView.setSection(
 		SECTION_LIVE,
 		string.format(
-			"<b>BAT</b>  state %s | aim x=%+.2f m, h=%.2f m%s",
+			"<b>BAT</b>  state %s | aim x=%+.2f m, h=%.2f m%s%s",
 			phase,
 			units.toMeters(aimX),
 			units.toMeters(aimY),
-			if clamped then " (clamped)" else ""
+			if clamped then " (clamped)" else "",
+			if gripStatus then "\n    " .. gripStatus else ""
 		)
 	)
 end

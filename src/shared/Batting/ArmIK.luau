@@ -110,6 +110,22 @@ function ArmIK.solve(torso: CFrame, rig: ArmRig, grip: Vector3, pole: Vector3): 
 	}
 end
 
+-- World frame of the last joint (wrist/ankle) with the solution applied and
+-- an identity Transform on that joint.
+function ArmIK.endJointFrame(torso: CFrame, rig: ArmRig, solution: Solution): CFrame
+	local upperArm = torso * rig.shoulderC0 * solution.shoulder * rig.shoulderC1:Inverse()
+	local lowerArm = upperArm * rig.elbowC0 * solution.elbow * rig.elbowC1:Inverse()
+	return lowerArm * rig.wristC0
+end
+
+-- Rotation-only Transform for the last joint that gives the end part (hand /
+-- foot) the world orientation of `desired`, whatever the limb above it did.
+function ArmIK.endTransform(torso: CFrame, rig: ArmRig, solution: Solution, desired: CFrame): CFrame
+	local joint = ArmIK.endJointFrame(torso, rig, solution)
+	-- part = joint * T * C1:Inverse()  =>  T.R = joint.R^-1 * desired.R * C1.R
+	return joint.Rotation:Inverse() * desired.Rotation * rig.wristC1.Rotation
+end
+
 -- Forward kinematics with the solved transforms (wrist Transform = identity).
 -- Returns the elbow joint, wrist joint and hand center in world space.
 function ArmIK.forward(torso: CFrame, rig: ArmRig, solution: Solution): (Vector3, Vector3, Vector3)

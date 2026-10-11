@@ -119,6 +119,23 @@ BattingConfig.Stance = {
 	-- Procedural arms: two-bone IK so both hands follow the bat (R15 only).
 	ArmIK = true,
 	ElbowOutward = 0.6, -- elbow hint: down, plus this much away from the chest
+	-- Silence the default character animations while batting. Roblox's
+	-- Animator rewrites every Motor6D.Transform each frame, which would undo
+	-- the procedural pose.
+	SuppressAnimations = true,
+	-- Waist rotation follows the bat's swing angle (0 at the resting angle).
+	TorsoYawGain = 0.3,
+	MaxTorsoYawDegrees = 55,
+	-- Body fit: the swing is a rotation about a pivot on the batter's body
+	-- axis, so the visible body is moved (client-side only) to put its shoulders
+	-- over that pivot, and crouches when the pivot is far below the shoulders.
+	BodyFit = true,
+	BodyDeadZoneMeters = 0.1, -- horizontal slack before the body moves
+	BodyMaxShiftMeters = 1.2,
+	BodyMaxCrouchMeters = 0.3,
+	BodyReachMargin = 0.92, -- fraction of arm length the grips may use
+	BodyFollowSeconds = 0.09, -- smoothing of the body position
+	Legs = true, -- bend the legs with feet planted while crouching
 }
 
 -- Collision search settings (see BatCollision).

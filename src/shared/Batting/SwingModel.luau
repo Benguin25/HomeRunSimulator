@@ -169,6 +169,13 @@ function SwingModel.aimFromRay(
 	return x, y
 end
 
+-- The swing pivot for an aim, without building a whole swing.
+function SwingModel.pivotFor(geometry: LaneGeometry.Geometry, aimX: number, aimY: number): Vector3
+	local dims = SwingModel.dimensions(geometry)
+	local across = geometry.right * -SwingModel.batterSideSign()
+	return SwingModel.aimToWorld(geometry, aimX, aimY) - across * (dims.pivotRadius + dims.sweetSpot)
+end
+
 function SwingModel.new(geometry: LaneGeometry.Geometry, aimX: number, aimY: number, startTime: number): Swing
 	local cfg = BattingConfig.Swing
 	local dims = SwingModel.dimensions(geometry)

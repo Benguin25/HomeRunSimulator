@@ -14,6 +14,7 @@ local Batting = Shared:WaitForChild("Batting")
 local ArmIK = require(Batting.ArmIK)
 local BatCollision = require(Batting.BatCollision)
 local BatStance = require(Batting.BatStance)
+local BodyFit = require(Batting.BodyFit)
 local BattingConfig = require(Batting.BattingConfig)
 local SwingModel = require(Batting.SwingModel)
 local SwingResolver = require(Batting.SwingResolver)
@@ -258,5 +259,103 @@ return function(t)
 		-- Degenerate hints (parallel to the reach direction) still solve.
 		local degenerate = ArmIK.solve(torso, rig, grip, Vector3.new(0, 0, 1))
 		TestUtil.assertTrue((select(3, ArmIK.forward(torso, rig, degenerate)) - grip).Magnitude < 2e-3, "degenerate hint broke the solve")
+	end)
+
+	t.test("the waist turns with the swing: zero at rest, monotonic, capped, never snapping", function()
+		local rest = math.rad(BattingConfig.Swing.RestAngleDegrees)
+		local sign = -SwingModel.batterSideSign()
+		TestUtil.assertNear(BatStance.torsoYaw(rest), 0, 1e-9, "yaw at the resting angle")
+		local previous = -math.huge
+		for degrees = -100, 150, 5 do
+			local yaw = BatStance.torsoYaw(math.rad(degrees)) * sign
+			TestUtil.assertTrue(yaw >= previous - 1e-9, `yaw not monotonic at {degrees} deg`)
+			TestUtil.assertTrue(math.abs(yaw) <= math.rad(BattingConfig.Stance.MaxTorsoYawDegrees) + 1e-9, "yaw above the cap")
+			previous = yaw
+		end
+		TestUtil.assertTrue(BatStance.torsoYaw(math.rad(60)) * sign > math.rad(20), "contact should be visibly turned in")
+		-- Continuous through the whole swing (the visual angle never jumps).
+		local geometry = TestUtil.geometries().straight
+		local swing = SwingModel.new(geometry, 0, units.toStuds(0.8), EPOCH)
+		local ready = BatStance.readyPose(geometry, anchorFor(geometry), 0, units.toStuds(0.8))
+		local last = BatStance.torsoYaw(ready.angle)
+		for i = 0, 600 do
+			local time = EPOCH + (swing.timeline.total + 0.02) * i / 600
+			local yaw = BatStance.torsoYaw(BatStance.visualPoseAt(swing, time, ready, ready).angle)
+			TestUtil.assertTrue(math.abs(yaw - last) < math.rad(4), `waist snaps by {math.deg(math.abs(yaw - last))} deg`)
+			last = yaw
+		end
+	end)
+
+	t.test("body fit puts the shoulders within arm's reach of the swing pivot", function()
+		local geometry = TestUtil.geometries().rotated
+		local home = geometry.batterCFrame.Position + geometry.up * 4.4 -- shoulder midpoint, studs
+		local armLength = 2.7 -- shoulder to hand center, typical R15 (studs)
+		local dims = SwingModel.dimensions(geometry)
+		local gripRadius = dims.pivotRadius + units.toStuds(BattingConfig.Stance.GripTopMeters)
+		local maxShift = units.toStuds(BattingConfig.Stance.BodyMaxShiftMeters)
+		local maxCrouch = units.toStuds(BattingConfig.Stance.BodyMaxCrouchMeters)
+		local atCap = 0
+		for _, aimX in { -0.5, -0.25, 0, 0.25, 0.5 } do
+			for _, aimY in { 0.3, 0.45, 0.6, 0.8, 1.05, 1.3 } do
+				local pivot = SwingModel.pivotFor(geometry, units.toStuds(aimX), units.toStuds(aimY))
+				local shift = BodyFit.target(geometry, home, pivot, armLength, gripRadius)
+				local flat = Vector3.new(shift.X, 0, shift.Z)
+				TestUtil.assertTrue(flat.Magnitude <= maxShift + 1e-6, "slides farther than allowed")
+				TestUtil.assertTrue(-shift.Y >= -1e-9 and -shift.Y <= maxCrouch + 1e-6, "crouch outside its limits")
+				-- Distance from the moved shoulders to the farthest grip on the pivot circle.
+				local shoulder = home + shift
+				local worst = 0
+				for degrees = -100, 150, 10 do
+					local direction = SwingModel.directionAt(SwingModel.new(geometry, units.toStuds(aimX), units.toStuds(aimY), EPOCH), math.rad(degrees))
+					worst = math.max(worst, (pivot + direction * gripRadius - shoulder).Magnitude)
+				end
+				if aimY >= 0.45 then
+					TestUtil.assertTrue(worst <= armLength, `aim ({aimX}, {aimY}): grips {worst} studs away, arms reach {armLength}`)
+				elseif -shift.Y >= maxCrouch - 1e-6 then
+					atCap += 1 -- very low pitches crouch as far as allowed
+				end
+			end
+		end
+		TestUtil.assertTrue(atCap > 0, "low pitches should use the full crouch")
+	end)
+
+	t.test("body fit is calm: dead zone, no jumps, and no change when disabled", function()
+		local geometry = TestUtil.geometries().straight
+		local home = geometry.batterCFrame.Position + geometry.up * 4.4
+		local gripRadius = 1.7
+		local pivotUnder = home - geometry.up * units.toStuds(0.8) -- right below the shoulders
+		local still = BodyFit.target(geometry, home, pivotUnder + geometry.right * units.toStuds(0.05), 2.7, gripRadius)
+		TestUtil.assertTrue(Vector3.new(still.X, 0, still.Z).Magnitude < 1e-6, "slides inside the dead zone")
+		-- Small aim changes make small body changes.
+		local previous = BodyFit.target(geometry, home, SwingModel.pivotFor(geometry, units.toStuds(-0.5), units.toStuds(0.8)), 2.7, gripRadius)
+		for step = 1, 100 do
+			local x = units.toStuds(-0.5 + step * 0.01)
+			local shift = BodyFit.target(geometry, home, SwingModel.pivotFor(geometry, x, units.toStuds(0.8)), 2.7, gripRadius)
+			TestUtil.assertTrue((shift - previous).Magnitude < units.toStuds(0.03), "body jumps for a 1 cm aim change")
+			previous = shift
+		end
+		BattingConfig.Stance.BodyFit = false
+		local off = BodyFit.target(geometry, home, pivotUnder + geometry.right * 5, 2.7, gripRadius)
+		BattingConfig.Stance.BodyFit = true
+		TestUtil.assertTrue(off.Magnitude == 0, "disabled body fit still moved the body")
+	end)
+
+	t.test("legs: the foot stays level and lands on its target while the knee bends", function()
+		local rig = syntheticArm(1)
+		local torso = CFrame.new(3, 6, -2) * CFrame.Angles(0, math.rad(40), 0)
+		local desired = CFrame.Angles(0, math.rad(25), 0) -- the foot's neutral orientation
+		-- Foot target, then the ankle-joint target the solver is aimed at.
+		for _, drop in { 0, 0.3, 0.7 } do
+			local footTarget = ArmIK.shoulderPosition(torso, rig) + Vector3.new(0.1, -1.4 + drop, 0.3)
+			local ankleTarget = footTarget + desired.Rotation * rig.wristC1.Position
+			local solverRig = table.clone(rig)
+			solverRig.wristC1 = CFrame.identity
+			local solution = ArmIK.solve(torso, solverRig, ankleTarget, Vector3.new(0, 0, 1))
+			local transform = ArmIK.endTransform(torso, rig, solution, desired)
+			local joint = ArmIK.endJointFrame(torso, rig, solution)
+			local foot = joint * transform * rig.wristC1:Inverse()
+			TestUtil.assertTrue((foot.Position - footTarget).Magnitude < 2e-3, `foot misses its target by {(foot.Position - footTarget).Magnitude}`)
+			TestUtil.assertTrue((foot.LookVector - desired.LookVector).Magnitude < 1e-4 and (foot.UpVector - desired.UpVector).Magnitude < 1e-4, "foot is not level")
+		end
 	end)
 end
