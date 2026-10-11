@@ -15,3 +15,51 @@ rojo serve
 ```
 
 For more help, check out [the Rojo documentation](https://rojo.space/docs).
+
+## Phase 1: Pitching system
+
+### Layout
+
+| Path | Runs on | Purpose |
+| --- | --- | --- |
+| `src/shared/Pitching/PitchConfig.luau` | both | All tunables (real-world units, readability overrides, timing, markers, camera, debug) |
+| `src/shared/Pitching/Units.luau` | both | Stud <-> meter / mph / rpm conversions (default 1 stud = 0.28 m) |
+| `src/shared/Pitching/PitchPhysics.luau` | both | Gravity + drag + Magnus model, fixed-step RK4, Hermite sampling, plane-crossing detection |
+| `src/shared/Pitching/PitchSolver.luau` | server | Finds the release velocity that hits a target (shooting + aim correction) |
+| `src/shared/Pitching/LaneGeometry.luau` | both | Lane axes, release point, strike-zone plane, strike calls |
+| `src/shared/Pitching/Pitch.luau` | both | Pitch generation (variation), wire encoding, flight reconstruction |
+| `src/shared/Pitching/PitchLane.luau` | server | Lifecycle state machine (one pitch per lane, clock-driven) |
+| `src/shared/Pitching/PitchPlayback.luau`, `BallVisual.luau` | client | Windup cue, ball flight rendering, catch fade |
+| `src/shared/Pitching/PitchNet.luau` | both | Replication names |
+| `src/server/MarkerResolver.luau` | server | Finds markers under `Workspace.GameplayMarkers`, creates fallbacks |
+| `src/server/PitchServer.luau` | server | Authoritative lanes, remotes, outcomes |
+| `src/server/BatterService.luau` | server | Lane assignment, batter placement, death/leave handling |
+| `src/client/PitchVisualController.luau` | client | Receives pitches, rebuilds trajectories, renders them |
+| `src/client/BattingCamera.luau` | client | Fixed batting camera |
+| `src/client/PitchDebugView.luau` | client | Studio-only overlay (F7) |
+| `src/server/Tests/` | Studio / CLI | Pure-Luau specs + runner |
+| `tools/run-tests.luau` | Lune CLI | Runs the specs outside Roblox |
+
+### Markers
+Markers are looked up by name (case-insensitive) under `Workspace.GameplayMarkers`; see `PitchConfig.Markers` for the accepted names (e.g. `HomePlate`, `PitcherMarker`/`Mound`, `BatterMarker`, optional `ReleasePoint`). BaseParts, Attachments and Models all work; the bottom of a part is treated as ground level. For several lanes, put each lane's markers in a child Folder named `Lane...`. Missing markers produce a warning and an invisible `Fallback_*` part under `GameplayMarkers.PitchingFallbackMarkers`. Stadium geometry is never modified.
+
+### Simulation approach
+The ball is a scripted trajectory, not a Roblox rigid body. RK4 at a fixed 240 Hz step integrates gravity, quadratic drag and Magnus lift once per pitch; rendering samples that trajectory by elapsed server time (cubic Hermite), so frame rate cannot change the path and every client renders the same curve from one replicated message. Plane crossings come from the trajectory data (with bisection refinement), not `Touched`.
+
+Tradeoff versus native physics: native bodies give free collisions but their motion depends on network ownership, the physics solver's step and replication. That causes jitter, makes paths differ between clients, and makes reliable targeting impractical. The scripted approach gives determinism and exact targeting, but collisions such as bat contact have to be computed explicitly (Phase 2 can sample `flight.trajectory` at the swing's server time).
+
+### Replication
+One `PitchEvent` message is sent per pitch at windup start. It carries the release time as a server timestamp, the release position, velocity, spin and target. There are a few lane-state attribute changes per pitch and a result message at the crossing. Nothing is sent per frame. The windup duration (1.1 s) is the latency budget: clients that receive the message late jump straight to the correct point in the flight. Clients never send ball positions.
+
+### Tests
+- **In Studio:** with `PitchConfig.Debug.RunTestsOnStart = true` the specs run when a Studio server starts, and the results appear in Output. This includes the Instance-cleanup test that only runs in Roblox.
+- **From the command line:** install [Lune](https://github.com/lune-org/lune) and run `lune run tools/run-tests.luau` from the repo root.
+
+### Playtesting
+1. Start the session with `rojo serve` and connect from Studio, or open a place built with `rojo build`.
+2. Press Play. The player is moved to the batter marker and locked in place, and the camera frames the pitcher and zone.
+3. Press F7 to toggle the debug overlay. It shows the zone, release point, target (green), crossing point (red), the trajectory, and a HUD with speed, flight time, target error, the server's call and the server/client crossing difference.
+4. Check the Output window for lines starting with `[Pitching]`. These include the markers used, any fallback warnings, a warning if the pitcher-to-plate distance doesn't match the scale, and a log line for each pitch.
+
+### Difficulty tiers and pacing
+`PitchConfig.Difficulty.Tiers` defines `Beginner` (50-55 mph, 1.6 s windup), `Intermediate` (64-72 mph) and `Advanced` (78-85 mph, the original tuning). `PitchConfig.Difficulty.Active` selects the tier (default `Beginner`); it sets both the real release speed the solver targets and the windup/ready timing. Pitch types add a `SpeedOffsetMph` on top of the tier. There is no per-player progression yet.
