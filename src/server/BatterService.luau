@@ -10,6 +10,7 @@ local Pitching = ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Pitching
 local PitchConfig = require(Pitching.PitchConfig)
 local PitchNet = require(Pitching.PitchNet)
 
+local BattedBallServer = require(script.Parent.BattedBallServer)
 local PitchServer = require(script.Parent.PitchServer)
 
 local BatterService = {}
@@ -144,6 +145,10 @@ local function onPlayerRemoving(player: Player)
 	local laneId = getLaneOf(player)
 	if laneId then
 		laneBatter[laneId] = nil
+		-- A ball in the air is abandoned with its batter. (A reset or death keeps
+		-- it: the outcome is already determined, and the lane stays paused
+		-- until it resolves, so the respawned batter never faces a pitch mid-flight.)
+		BattedBallServer.cancelLane(laneId, "BatterLeft")
 		PitchServer.stopLane(laneId, "BatterLeft")
 		PitchServer.setBatter(laneId, nil)
 		local nextPlayer = table.remove(waiting, 1)

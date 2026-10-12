@@ -32,6 +32,7 @@ export type ContactResult = {
 	batAxisPoint: Vector3,
 	impactNormal: Vector3, -- unit, bat -> ball; direction of the collision impulse
 	ballVelocity: Vector3,
+	ballSpin: Vector3, -- incoming pitch spin (rad/s, world); Phase 3A impact model input
 	batVelocity: Vector3, -- of the bat surface at the contact point
 	relativeVelocity: Vector3, -- batVelocity - ballVelocity
 	closingSpeed: number, -- relativeVelocity . impactNormal (> 0 = approaching)
@@ -87,7 +88,8 @@ function ContactQuality.evaluate(
 	ballVelocity: Vector3,
 	ballRadius: number,
 	releaseTime: number,
-	idealContactTime: number?
+	idealContactTime: number?,
+	ballSpin: Vector3?
 ): ContactResult
 	local units = geometry.units
 	local quality = BattingConfig.Quality
@@ -129,6 +131,7 @@ function ContactQuality.evaluate(
 		batAxisPoint = hit.axisPoint,
 		impactNormal = normal,
 		ballVelocity = ballVelocity,
+		ballSpin = ballSpin or Vector3.zero,
 		batVelocity = batVelocity,
 		relativeVelocity = relative,
 		closingSpeed = closing,

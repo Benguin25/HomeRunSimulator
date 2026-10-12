@@ -10,8 +10,9 @@
 -- Swing: on click (if the previous swing has fully recovered) the client
 -- stamps the click with the synchronized server clock, starts the bat swing
 -- immediately, sends the intent, and runs the same deterministic resolver the
--- server runs to predict contact effects on time. The server's result decides
--- the outcome; a misprediction is corrected when it arrives.
+-- server runs to predict contact effects on time (including the batted ball,
+-- through BattedBallController). The server's result decides the outcome; a
+-- misprediction is corrected when it arrives.
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -31,6 +32,7 @@ local ContactQuality = require(Batting.ContactQuality)
 local SwingModel = require(Batting.SwingModel)
 local SwingResolver = require(Batting.SwingResolver)
 
+local BattedBallController = require(script.Parent.BattedBallController)
 local BattingDebugView = require(script.Parent.BattingDebugView)
 local BattingPresentation = require(script.Parent.BattingPresentation)
 local CharacterGrip = require(script.Parent.CharacterGrip)
@@ -234,6 +236,7 @@ local function trySwing()
 		entry.contact = resolution.contact
 		if resolution.contact then
 			PitchVisualController.cutPitch(lane, flight.data.id, resolution.contact.contactTime)
+			BattedBallController.predict(lane, flight.data.id, resolution.contact)
 		end
 	end
 	BattingDebugView.drawSwing(geo, swing, entry.predicted)
@@ -272,6 +275,10 @@ local function onSwingResult(payload: BattingNet.SwingResultPayload)
 		if entry.pitchId then
 			PitchVisualController.uncutPitch(entry.laneId, entry.pitchId)
 		end
+	end
+	if entry.pitchId and (serverContact == nil or payload.hitId == nil) then
+		-- No batted ball from the server for this swing: drop any predicted flight.
+		BattedBallController.cancelPrediction(entry.laneId, entry.pitchId)
 	end
 	if payload.pitchId == nil then
 		-- Practice swing or rejected: nothing to label.

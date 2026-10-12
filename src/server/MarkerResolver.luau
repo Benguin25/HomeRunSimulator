@@ -205,11 +205,25 @@ local function resolveLane(laneId: string, laneRoot: Instance, markersRoot: Inst
 		)
 	end
 
+	-- Optional field markers (no fallbacks: FieldFrame uses the rulebook layout).
+	local fieldMarkers: { [string]: Vector3? } = {}
+	for _, role in { "LeftFoulPole", "RightFoulPole", "FirstBase", "ThirdBase" } do
+		local found = findMarker(laneRoot, stadium, (markerConfig :: any)[role], {})
+		if found and found ~= plate and found ~= pitcher and found ~= batter then
+			fieldMarkers[role] = MarkerResolver.groundPosition(found)
+			sources[role] = found:GetFullName()
+		end
+	end
+
 	local inputs: LaneGeometry.Inputs = {
 		plateGround = plateGround,
 		pitcherGround = pitcherGround,
 		releasePoint = release and MarkerResolver.centerPosition(release),
 		batterGround = batter and MarkerResolver.groundPosition(batter),
+		leftFoulPole = fieldMarkers.LeftFoulPole,
+		rightFoulPole = fieldMarkers.RightFoulPole,
+		firstBase = fieldMarkers.FirstBase,
+		thirdBase = fieldMarkers.ThirdBase,
 	}
 	sources.Release = if release then release:GetFullName() else "derived from pitcher marker"
 	sources.Batter = if batter then batter:GetFullName() else "derived from plate marker"

@@ -222,13 +222,8 @@ BattingConfig.Presentation = {
 	CameraKickDegrees = 0.35, -- Great/Perfect only; decays in CameraKickSeconds
 	CameraKickSeconds = 0.12,
 	ContactMarkerSeconds = 1.5,
-	-- Temporary Phase 2 stand-in for batted-ball flight: a short, fading
-	-- deflection along the impact normal. NOT a distance or outcome.
-	TemporaryDeflection = {
-		Enabled = true,
-		Seconds = 0.6,
-		SpeedScale = 0.5, -- fraction of the closing speed
-	},
+	-- (The Phase 2 TemporaryDeflection stand-in was replaced by the Phase 3A
+	-- batted-ball flight: see BattedBall/BattedBallConfig.)
 }
 
 BattingConfig.Debug = {

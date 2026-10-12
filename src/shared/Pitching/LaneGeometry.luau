@@ -22,6 +22,12 @@ export type Inputs = {
 	pitcherGround: Vector3, -- pitcher marker at ground level
 	releasePoint: Vector3?, -- explicit release marker, if one exists
 	batterGround: Vector3?, -- batter marker at ground level, if one exists
+	-- Optional field markers (Phase 3A, see BattedBall/FieldFrame): foul poles
+	-- and bases define the foul lines. Unused by pitching.
+	leftFoulPole: Vector3?,
+	rightFoulPole: Vector3?,
+	firstBase: Vector3?,
+	thirdBase: Vector3?,
 }
 
 export type Geometry = {

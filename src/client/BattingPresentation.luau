@@ -11,7 +11,6 @@ local Workspace = game:GetService("Workspace")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Pitching = Shared:WaitForChild("Pitching")
-local BallVisual = require(Pitching.BallVisual)
 local LaneGeometry = require(Pitching.LaneGeometry)
 local PitchConfig = require(Pitching.PitchConfig)
 local Batting = Shared:WaitForChild("Batting")
@@ -49,6 +48,7 @@ local label: TextLabel
 local subLabel: TextLabel
 local labelScale: UIScale
 local labelShownAt = -math.huge
+local labelSeconds = cfg.LabelSeconds
 local batParts: { BasePart } = {}
 local batCFrames: { CFrame } = {}
 local batModel: Model? = nil
@@ -312,11 +312,13 @@ function BattingPresentation.drawZone(camera: Camera, geometry: LaneGeometry.Geo
 	end
 end
 
-function BattingPresentation.showLabel(text: string, color: Color3, detail: string?)
+-- `seconds` overrides how long the label stays up (default Presentation.LabelSeconds).
+function BattingPresentation.showLabel(text: string, color: Color3, detail: string?, seconds: number?)
 	label.Text = text
 	label.TextColor3 = color
 	subLabel.Text = detail or ""
 	labelShownAt = os.clock()
+	labelSeconds = seconds or cfg.LabelSeconds
 end
 
 function BattingPresentation.showContactLabel(contact: ContactQuality.ContactResult, geometry: LaneGeometry.Geometry)
@@ -458,38 +460,6 @@ local function spawnMarker(position: Vector3, size: number)
 	})
 end
 
--- TEMPORARY (Phase 2): short fading deflection along the impact normal so a
--- hit reads as a hit. Phase 3 replaces this with the batted-ball solver.
-local function spawnDeflection(geometry: LaneGeometry.Geometry, contact: ContactQuality.ContactResult)
-	local deflection = cfg.TemporaryDeflection
-	if not deflection.Enabled then
-		return
-	end
-	local units = geometry.units
-	local ball = PitchConfig.Ball
-	local visual = BallVisual.new(units.toStuds(ball.RadiusMeters * 2) * ball.VisualScale, folder)
-	visual:setTrailEnabled(true)
-	local velocity = contact.impactNormal * math.max(contact.closingSpeed, 0) * deflection.SpeedScale
-	local gravity = Vector3.new(0, -units.accelToStuds(9.81), 0)
-	local origin = contact.ballCenter
-	local start = os.clock()
-	visual:setCFrame(CFrame.new(origin))
-	addEffect({
-		update = function(now)
-			local t = now - start
-			if t >= deflection.Seconds then
-				return false
-			end
-			visual:setCFrame(CFrame.new(origin + velocity * t + gravity * (0.5 * t * t)))
-			visual:setTransparency(math.clamp((t / deflection.Seconds - 0.6) / 0.4, 0, 1))
-			return true
-		end,
-		destroy = function()
-			visual:destroy()
-		end,
-	})
-end
-
 function BattingPresentation.playContact(contact: ContactQuality.ContactResult, geometry: LaneGeometry.Geometry)
 	local units = geometry.units
 	local strong = contact.label == "Perfect" or contact.label == "Great"
@@ -500,7 +470,6 @@ function BattingPresentation.playContact(contact: ContactQuality.ContactResult, 
 	spawnFlash(contact.contactPoint, units.toStuds(0.08 + 0.08 * contact.score))
 	spawnSparks(contact.contactPoint, contact.impactNormal, if strong then 18 else 8)
 	spawnMarker(contact.contactPoint, units.toStuds(0.04))
-	spawnDeflection(geometry, contact)
 	if strong then
 		kickStart = os.clock()
 	end
@@ -511,7 +480,7 @@ function BattingPresentation.update()
 	local now = os.clock()
 
 	local age = now - labelShownAt
-	local duration = cfg.LabelSeconds
+	local duration = labelSeconds
 	if age <= duration then
 		labelScale.Scale = 1 + 0.35 * math.max(0, 1 - age / 0.12) ^ 2
 		local fade = math.clamp((age - (duration - 0.3)) / 0.3, 0, 1)

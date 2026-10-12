@@ -18,6 +18,7 @@ Units.METERS_PER_MILE = 1609.344
 Units.SECONDS_PER_HOUR = 3600
 Units.MPH_TO_MPS = Units.METERS_PER_MILE / Units.SECONDS_PER_HOUR -- 0.44704
 Units.RPM_TO_RAD_PER_SEC = (2 * math.pi) / 60
+Units.METERS_PER_FOOT = 0.3048
 
 export type Converter = {
 	metersPerStud: number,

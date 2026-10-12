@@ -105,6 +105,10 @@ local function createLane(resolved: MarkerResolver.ResolvedLane, lanesFolder: Fo
 	folder:SetAttribute(attrs.PitcherGround, resolved.inputs.pitcherGround)
 	folder:SetAttribute(attrs.ReleasePoint, resolved.inputs.releasePoint)
 	folder:SetAttribute(attrs.BatterGround, resolved.inputs.batterGround)
+	folder:SetAttribute(attrs.LeftFoulPole, resolved.inputs.leftFoulPole)
+	folder:SetAttribute(attrs.RightFoulPole, resolved.inputs.rightFoulPole)
+	folder:SetAttribute(attrs.FirstBase, resolved.inputs.firstBase)
+	folder:SetAttribute(attrs.ThirdBase, resolved.inputs.thirdBase)
 	folder:SetAttribute(attrs.State, "Idle")
 	folder.Parent = lanesFolder
 
@@ -229,6 +233,12 @@ function PitchServer.setLanePaused(laneId: string, paused: boolean)
 	if record then
 		record.lane:setPaused(paused)
 	end
+end
+
+-- The lane's replicated runtime folder (attributes visible to clients).
+function PitchServer.getLaneFolder(laneId: string): Folder?
+	local record = lanes[laneId]
+	return record and record.folder
 end
 
 function PitchServer.getActivePitch(laneId: string): PitchLane.ActivePitch?

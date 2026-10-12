@@ -204,6 +204,14 @@ PitchConfig.Markers = {
 	ReleaseHints = { "release" },
 	BatterHints = { "batter", "batting" },
 	PlateHints = { "homeplate", "plate", "strikezone" },
+	-- Optional field markers for batted balls (Phase 3A), exact names only
+	-- (lane folder first, then Workspace.Stadium). Foul poles define the
+	-- foul lines best; bases are the fallback; with neither, the rulebook
+	-- 45-degree layout around the home -> mound line is used.
+	LeftFoulPole = { "LeftFoulPole", "FoulPoleLeft", "LeftFieldFoulPole" },
+	RightFoulPole = { "RightFoulPole", "FoulPoleRight", "RightFieldFoulPole" },
+	FirstBase = { "FirstBase", "FirstBaseMarker", "FirstBaseBag", "1stBase" },
+	ThirdBase = { "ThirdBase", "ThirdBaseMarker", "ThirdBaseBag", "3rdBase" },
 }
 
 PitchConfig.Camera = {

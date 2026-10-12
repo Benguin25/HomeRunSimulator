@@ -99,7 +99,7 @@ One `PitchEvent` message is sent per pitch at windup start. It carries the relea
 - Direction hints: spray-angle and launch-angle hints taken from the impact normal.
 - Grading: factors, score and label.
 
-Positions and speeds are in studs. The current deflection (`Presentation.TemporaryDeflection`) is a clearly temporary visual and produces no distance.
+Positions and speeds are in studs. Phase 3A added `ballSpin` (the incoming pitch spin) and replaced the temporary Phase 2 deflection with the real batted-ball flight (see Phase 3A below).
 
 ### Networking and validation
 - **Requests** carry intent only. The server parses them strictly and rejects non-numbers, NaN/inf, non-integer or old sequence numbers, and aim outside the region. It also rate-limits floods (80 ms) and enforces the swing cooldown and one swing per pitch.
@@ -294,3 +294,304 @@ These can't be tested from the CLI:
 - that releasing restores the original joint state.
 
 If `motion:` reads NOT VISIBLE with `14 AnimationConstraint`, the next things to check are network ownership of the limbs and whether the engine accepts the client-side `IsKinematic` change.
+
+## Phase 3A: Batted-ball physics
+
+A validated contact now launches a real baseball. The server turns its own contact measurements into an outgoing velocity and spin with an impulse model, integrates the flight under gravity, drag and Magnus lift, sweeps it against the stadium for the first impact, and measures the outcome. Clients rebuild the same flight from one launch message.
+
+### Layout
+
+| Path | Runs on | Purpose |
+| --- | --- | --- |
+| `src/shared/BattedBall/BattedBallConfig.luau` | both | All batted-ball tunables, SI units (see the table below) |
+| `src/shared/BattedBall/FieldFrame.luau` | both | Field coordinate system from the markers, foul lines, spray angle, fair/foul |
+| `src/shared/BattedBall/ImpactModel.luau` | both | Bat-ball impulse: effective bat mass, restitution, friction, spin |
+| `src/shared/BattedBall/FlightPhysics.luau` | both | SI float64 RK4 integrator: gravity, drag, Magnus, spin decay, Hermite sampling |
+| `src/shared/BattedBall/BattedBall.luau` | both | Contact → launch record, wire format, flight reconstruction, derived numbers |
+| `src/shared/BattedBall/LandingDetector.luau` | both | Swept first-impact detection, ground vs. obstacle, distances, territory |
+| `src/shared/BattedBall/HitLifecycle.luau` | both | Per-lane hit state machine (Idle → Flying → Resolved → Idle) |
+| `src/shared/BattedBall/BattedBallPlayback.luau` | client | Visual ball following the flight against server time |
+| `src/shared/BattedBall/BattedBallNet.luau` | both | Remote names and messages |
+| `src/server/BattedBallServer.luau` | server | Authoritative launch, Spherecast caster, lane pause, broadcasts |
+| `src/client/BattedBallController.luau` | client | Prediction, server reconciliation, playback, landing marker and distance label |
+| `src/client/BattedBallDebugView.luau` | client | F7 overlay section and Studio-only trajectory drawing |
+
+### What contact data is used
+Everything comes from the Phase 2 `ContactResult`: impact normal, ball velocity, bat surface velocity at the contact point, distance from the knob (so the sweet-spot offset), contact time and ball center. The only addition is `ballSpin`, the incoming pitch's spin vector, which the friction model needs. The quality label and score are **never** read by the physics; they are only compared with it in tests.
+
+### Coordinate system
+- **Origin:** the home plate marker at ground level.
+- **Forward (x):** horizontal, home plate → pitcher marker (toward center field).
+- **Up (y):** Roblox world up.
+- **Right (z):** toward the first-base side (catcher's right).
+- Field coordinates are meters and right-handed (forward × up = right), so cross products match world space. Nothing assumes a world axis; the tests run on a straight lane and on a rotated, raised one.
+- **Spray angle:** 0 = straightaway center field, + = right-field side, − = left-field side. **Pull angle** is relative to the batter: + = pull side (left field for a right-handed batter, from `PitchConfig.Geometry.BatterSide`).
+- **Foul lines:** these come from optional markers, matched by exact name in the lane folder or `Workspace.Stadium`.
+  - `LeftFoulPole` / `RightFoulPole` are used first.
+  - `ThirdBase` / `FirstBase` are the fallback (see `PitchConfig.Markers`).
+  - With no markers, the rulebook layout is used: each line 45° from the home → mound line. This is still marker-relative.
+  - Marker lines whose opening angle falls outside 70°–110° are rejected with a logged reason.
+  - The source is printed once per lane: `[BattedBall] Lane1 field frame: foul lines from ...`.
+- **Units:** physics is SI. Studs only appear at the `FieldFrame` boundary through the existing `PitchConfig.Units.MetersPerStud` (0.28). Roblox `Workspace.Gravity` is not used.
+
+### Impact model (`ImpactModel`)
+The ball (a sphere) collides with a free bat, represented by its effective mass at the impact point (Nathan 2000; Cross 2011). `n` is the unit normal from the bat axis to the ball center, `v` and `V` are the ball and bat-surface velocities, `m` and `R` are the ball's mass and radius, and `I_ball = 0.4 m R²`.
+
+```
+1/M_eff = 1/M_bat + b² / I_cm                 b = impact distance from the bat's balance point
+e(d)    = e_min + (e_0 − e_min) exp(−(d/w)²)  d = distance from the sweet spot
+u_n     = (v − V)·n   (< 0 when approaching)
+J_n     = −(1 + e) u_n / (1/m + 1/M_eff)
+s_t     = tangential slip of the ball's contact point: v + ω × (−R n) − V, minus its normal part
+J_t     = −(1 + e_t) s_t / (1/m + R²/I_ball + 1/M_eff),  capped at |J_t| ≤ μ J_n (then sliding)
+v'      = v + (J_n n + J_t) / m
+ω'      = ω + (−R n) × J_t / I_ball
+```
+
+- **Head-on hits.** The impulse reduces exactly to the batted-ball-speed formula `v_out = q v_pitch + (1 + q) v_bat`, with `q = (e − m/M_eff) / (1 + m/M_eff)`. The default wood bat has q ≈ 0.22 at the sweet spot; measured wood bats are around 0.2.
+- **How contact types differ.** Each one follows from the geometry, with no label lookup:
+  - **Squared up:** the normal is along the bat's motion.
+  - **Under the ball:** the normal tilts up, giving a higher launch, and friction adds backspin.
+  - **Topped:** the normal tilts down, giving a grounder with topspin.
+  - **Inside / outside:** lower e and lower M_eff toward the handle and the tip.
+  - **Glancing:** a small approach speed means a small impulse.
+  - **Early / late:** the normal turns with the bat, sending the ball to the pull side or the opposite field.
+- **Incoming pitch spin.** It is partly retained through the friction model, so fastball backspin reduces the batted ball's backspin, as Nathan et al. observed in 2012.
+- **Numerical safety.** A separating or degenerate contact (approach ≤ 0.01 m/s, or a zero normal) exchanges no impulse, and the ball keeps its path, like a foul tip. Non-finite results fall back to the incoming state.
+- **Descriptive contact type.** `BattedBall.describeContact` (Squared / Under / Topped / Inside / Outside / Glancing / Weak) is computed from the same measurements, for the HUD and logs only.
+- **Simplifications.** e does not depend on speed. M_eff is also used for the tangential direction. There is no bat vibration or bending model, and the swing is not slowed by the collision.
+
+### Flight model (`FlightPhysics`)
+```
+a      = (0, −g, 0) − k (Cd₀ + Cd₁ S) |v| v + k C_L(S) |v| (ω̂ × v)     k = ρ A / (2m)
+S      = R |ω(t)| / |v|,   ω(t) = ω₀ exp(−t / τ)
+C_L(S) = Sawicki–Hubbard–Stronge (shared with pitching: PitchPhysics.liftCoefficient)
+```
+
+- **Integration.** Fixed-step RK4 at 120 Hz on plain Luau numbers (float64), with time-dependent spin. It never uses float32 world coordinates, so accuracy does not depend on distance or on where the stadium is.
+- **Sampling.** Cubic Hermite between steps, so position is a pure function of time.
+- **Drag coefficient.** `Cd = 0.30 + 0.34 S`. This is Nathan's trajectory-calculator drag (0.3008 + 0.0292 per 1000 rpm) expressed through the spin factor S.
+- **Reference check.**
+  - **Statcast reference:** 100 mph at 28° with 2500 rpm carries 391 ft with 5.4 s of hang time (Statcast averages ≈ 390–400 ft).
+  - **Convergence:** 120 Hz agrees with 960 Hz to better than 1 µm for normal hits and 10 µm at 300 mph.
+- **Projection.** `fieldLanding` is where the free flight crosses plate level (`y = R`). It is a projection that ignores obstacles. The measured distance comes from `LandingDetector`.
+
+### First impact and distance (`LandingDetector`)
+- **Swept detection, in two passes:**
+  - **Coarse:** sphere sweeps along 1/20 s chords. The radius is the ball radius plus the curve's largest deviation from the chord, so the swept volume contains the path.
+  - **Fine:** re-sweeps of each 120 Hz segment inside a chord that hit. The first fine hit is the first impact.
+  - This is equivalent to sweeping every step, which a randomized brute-force test checks. Tunneling is impossible at any speed; a 300 mph ball against a 5 cm wall is tested.
+- **Surface classes:** from the hit normal (`GroundMinNormalUp` = 0.7):
+  - **Ground** faces mostly up.
+  - **Wall** is steep.
+  - **Ceiling** faces down.
+- **Outcomes:**
+
+| Kind | When | Distances reported |
+| --- | --- | --- |
+| `Landed` | First impact is ground (field, terrain, raised stands) | `carryMeters` = horizontal distance from home plate to the touch point. Rolling is never added. |
+| `Obstacle` | First impact is a wall or ceiling | **No carry.** We don't simulate the bounce, so `impactDistanceMeters` + `impactHeightMeters` are reported instead, labelled as such (HUD: "OFF THE WALL"). |
+| `NoImpact` | Nothing was hit before the budget ended | No carry; only the labelled projection. |
+
+- **Projection:** every outcome also carries `projectedCarryMeters`, the plate-level landing of the free flight. It is always labelled "projected" and never replaces a measurement.
+- **Fair/foul:**
+  - The call uses the touch point (or the projection) against the foul lines; the lines themselves are fair.
+  - Landings short of the bases (27.43 m) are marked `territoryProvisional`, because the ball could still roll.
+  - Home runs are **not** awarded. Nothing infers one from distance.
+- **What the server ignores:**
+  - all player characters;
+  - `Workspace.GameplayMarkers`, and the client-only `PitchVisuals`, `BattingVisuals`, `BattedBallVisuals` and `PitchDebug` folders;
+  - parts tagged `BattedBallIgnore` (CollectionService);
+  - non-collidable parts (`RespectCanCollide`).
+
+### Server-authoritative hit lifecycle
+1. `BattingServer` validates and resolves the swing (unchanged).
+2. On contact, `PitchServer.resolveContact` ends the pitch. Only if that succeeds (so a contact can never launch twice) does `BattedBallServer.launch` run.
+3. The server runs the impact model, builds the flight from the **launch record itself**, and sweeps it with `Workspace:Spherecast`. The stadium is static, so the outcome is known at launch.
+4. `HitLifecycle` pauses the lane's pitching and broadcasts one `Launch` message: the launch record (contact position, field velocity and spin as Vector3s, contact server time) plus the server's flight end time.
+5. At `launchTime + endTime` it broadcasts `Resolved`, exactly once, with the outcome. It then holds `ResultHoldSeconds` (1.5 s), unpauses the lane, and the normal Ready → Windup cycle continues.
+6. **Edge cases:**
+   - A second launch on a busy lane is refused.
+   - When the batter **leaves**, the hit is cancelled and clients remove the ball.
+   - A **reset or death** keeps the ball flying, since its outcome is already decided. The lane stays paused until it resolves, so a respawned batter never gets a pitch mid-flight.
+   - Every path unpauses the lane, and nothing can hold it longer than `MaxFlightSeconds + ResultHoldSeconds`.
+7. The lane folder's `HitState` attribute mirrors the state for debugging. It is excluded from client geometry rebuilds through `PitchNet.RuntimeLaneAttributes`.
+
+Traffic per hit is three messages at most (`Launch`, `Resolved`, `Cancelled`), plus a few attribute changes. Nothing is sent per frame.
+
+### Client rendering
+- **Continuity.** The pitch playback is cut at the contact server time, and the batted ball starts at `t = 0` at the contact ball center. That is the same point (tested), so there is no snap.
+- **Prediction.** The swinging client predicts its hit with the same deterministic code at click time. The ball stays hidden until the contact instant.
+- **When the server's `Launch` arrives:**
+  - **Identical launch record:** the prediction is adopted and only learns the end time.
+  - **Different record:** the prediction is replaced by the server flight at the current server time.
+  - **No server contact, or nothing within 1.25 s:** the prediction is removed.
+- **Other clients** start from the `Launch` message.
+- **Frame rate.** Position is `BattedBall.positionAt(flight, serverNow − launchTime)`, so every frame rate gives the same path.
+- **Ball and landing.**
+  - The ball uses the existing `BallVisual`, with a longer trail (0.35 s) and slowed visual spin.
+  - It rests at the impact point for 1.2 s, then fades.
+  - A landing ring with a distance billboard appears, and the batter sees a headline label: the distance (e.g. "265 FT"), "FOUL" or "OFF THE WALL", plus EV and launch angle.
+- **Units.** Feet by default; `Display.DistanceUnit = "Meters"` switches to meters.
+- **Camera.** The batting camera is unchanged; the follow camera is Phase 3B.
+- **Removed.** The Phase 2 `TemporaryDeflection` is gone.
+
+### Configuration (`BattedBallConfig`)
+| Key | Default | Unit | Meaning |
+| --- | --- | --- | --- |
+| `Impact.Bat.MassKg` | 0.88 | kg | Bat mass (34 in / ~31 oz wood) |
+| `Impact.Bat.CenterOfMassFromKnobMeters` | 0.56 | m | Balance point |
+| `Impact.Bat.MomentOfInertiaKgM2` | 0.040 | kg·m² | About the balance point; sets how fast M_eff drops toward the ends |
+| `Impact.SweetSpotRestitution` | 0.50 | – | Normal CoR at the sweet spot (`BattingConfig.Bat.SweetSpotFromKnobMeters`) |
+| `Impact.MinRestitution` / `RestitutionFalloffMeters` | 0.20 / 0.16 | – / m | Gaussian falloff of CoR along the bat |
+| `Impact.FrictionCoefficient` | 0.5 | – | Coulomb μ, ball on bat |
+| `Impact.TangentialRestitution` | 0 | – | 0 = contact point ends rolling |
+| `Impact.BallInertiaFactor` | 0.4 | – | I_ball / (m R²) |
+| `Impact.MinApproachSpeedMps` | 0.01 | m/s | Below this, no impulse (foul tip) |
+| `Power.BatSpeedMultiplier` | **1.2** | – | Gameplay: scales the bat velocity at impact only. The drawn swing (~47 mph sweet spot) and its timing are unchanged. 1.2 ≈ 56 mph, a high-school swing. |
+| `Power.RestitutionScale` | 1 | – | Future upgrades |
+| `Power.SpinEffectiveness` | 1 | – | Scales outgoing spin |
+| `Power.ArcadePowerMultiplier` | 1 | – | Gameplay: scales outgoing velocity (future upgrades) |
+| `Power.MaxLaunchEnergyJoules` | 250 | J | Safety cap (≈130 mph) |
+| `Flight.FixedStepSeconds` | 1/120 | s | RK4 step |
+| `Flight.DragCoefficient` / `DragSpinSlope` | 0.30 / 0.34 | – | `Cd = Cd₀ + Cd₁ S` |
+| `Flight.SpinDecaySeconds` | 25 | s | τ |
+| `Flight.AirDensityScale` | 1 | – | Gameplay: "thin air" (× `PitchConfig.Environment.AirDensityKgPerCubicMeter`, 1.225 kg/m³) |
+| `Flight.MaxFlightSeconds` | 12 | s | Budget (≤ 1440 steps) |
+| `Flight.MaxHorizontalDistanceMeters` | 1500 | m | Budget |
+| `Flight.FloorBelowPlateMeters` | 30 | m | The free flight continues this far below plate level |
+| `Collision.ChordSeconds` | 1/20 | s | Coarse sweep chord |
+| `Collision.GroundMinNormalUp` | 0.7 | – | Ground vs. wall threshold |
+| `Collision.RespectCanCollide`, `IgnoreTag`, `IgnoreWorkspaceChildren` | | | Server raycast filter |
+| `Collision.BaseDistanceMeters` | 27.43 | m | Provisional fair/foul threshold |
+| `FoulLines.*` | 45°, 70–110° | deg | Rulebook fallback and marker sanity range |
+| `Lifecycle.ResultHoldSeconds` | 1.5 | s | Lane hold after the first impact |
+| `Lifecycle.PredictionTimeoutSeconds` | 1.25 | s | Removes an unconfirmed prediction |
+| `Display.*` | | | Unit, trail, visual spin, hold/fade, landing marker, label seconds |
+| `Debug.*` | | | Trajectory dots, foul lines, Output logging |
+
+Ball mass and radius, gravity and air density are shared with pitching (`PitchConfig.Ball`, `PitchConfig.Environment`).
+
+### Measured beginner hits (CLI, default config, 52 mph pitch → 48 mph at the plate)
+Aim offset is the bat's height relative to the ball center at the contact plane (− = under the ball). Timing is relative to perfect.
+
+| Aim | Timing | Label | Type | EV (mph) | Launch | Spray | Backspin (rpm) | Apex (m) | Flight (s) | Carry |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| −5 cm | 0 | Great | Under | 66.9 | +45.0° | +4.9° | 3835 | 24.1 | 4.87 | 194 ft |
+| −4 cm | 0 | Great | Under | 71.8 | +35.9° | +4.8° | 2964 | 20.7 | 4.57 | 245 ft |
+| −3 cm | 0 | Perfect | Squared | 75.6 | +27.4° | +4.8° | 2079 | 15.0 | 3.90 | 265 ft |
+| −2 cm | 0 | Perfect | Squared | 78.3 | +19.4° | +4.8° | 1205 | 8.9 | 2.92 | 243 ft |
+| −1 cm | 0 | Perfect | Squared | 80.0 | +11.6° | +4.8° | 327 | 3.8 | 1.71 | 168 ft |
+| 0 | 0 | Perfect | Squared | 80.9 | +3.9° | +4.8° | −552 | 1.4 | 0.69 | 77 ft |
+| +2 cm | 0 | Perfect | Squared | 79.9 | −11.6° | +4.8° | −2310 | 1.1 | 0.13 | 16 ft |
+| −3 cm | 20 ms early | Great | Under | 67.6 | +41.0° | −16.3° (pull) | 3468 | 22.1 | 4.69 | 213 ft |
+| −3 cm | 20 ms late | Perfect | Squared | 79.3 | +13.4° | +22.6° (oppo) | 585 | 4.6 | 1.93 | 180 ft |
+
+- **Power ceiling.** The best beginner contact carries ≈265 ft: deep outfield, but not a home run in a regulation park. Raising `Power.BatSpeedMultiplier` (e.g. 1.4) is the intended first power lever.
+- **Launch-angle sensitivity.** The launch angle changes by ≈8° per centimeter of vertical aim. With the readability barrel radius (5.5 cm), the 220+ ft window is roughly 1.5–4.5 cm under the ball's center.
+- **Label vs. distance.** The Phase 2 "Perfect" grade means squared-up exit velocity, not maximum distance. A dead-center "Perfect" is a hard 4° liner.
+
+### Performance budget
+These are Lune CLI timings; Studio and server timings will differ.
+
+| Work | Cost |
+| --- | --- |
+| Full hit on the client (swing resolve + impact + flight) | ≈4.4 ms |
+| `buildFlight`, typical 100 mph fly ball | ≈4 ms (≈820 RK4 steps, down to the floor 30 m below plate level) |
+| `buildFlight`, worst case (12 s budget) | ≈5.2 ms (1440 steps) |
+| Sweep | about one Spherecast per 1/20 s of flight, plus ≤ 6 fine casts in the chord that hits: ≈100 casts for a 5 s fly ball, ≤ 246 for the 12 s budget |
+
+The server log line for each hit reports the measured simulation and sweep milliseconds, plus step and cast counts. Hard limits are 12 s, 1500 m and 250 J. All float math is relative to home plate in float64, so very long future hits keep their precision. Roblox's `Spherecast` limits (1024 studs of travel, 256 studs of radius) are far above one chord, even at 1000 mph.
+
+### Debug (F7, Studio only)
+- **`HIT` line:**
+  - hit id, and whether it is predicted, predicted+confirmed or server;
+  - flight state (waiting for contact / flying / resolved);
+  - `t`, the server end time, live distance (m and ft) and height;
+  - sim step count and end reason.
+- **Launch line:** EV, launch angle, spray (field side, pull/oppo), backspin/sidespin/total rpm, apex and its time, and the plate-level projection. For your own predicted hits, also the impact model's internals: contact type, e, M_eff, q, approach speed, normal and tangential impulse, rolling/sliding, and the energy cap.
+- **Outcome line:**
+  - Before landing: the predicted first-impact position from the server's end time.
+  - After: the server outcome (LANDED / HIT WALL / NO IMPACT, distance, fair/foul/provisional), the surface and instance hit, measured vs. projected carry, and where the client's flight was at that time.
+- **World drawings:**
+  - trajectory dots (magenta while unconfirmed, cyan once the server confirms);
+  - apex (yellow), plate-level projection (white) and predicted first impact (orange);
+  - the server's impact point (green = landed, red = obstacle);
+  - foul lines.
+  - The last two trajectories are kept.
+- **Output log:** one line per hit, `[BattedBall] Lane1 hit #n: … mph, launch …, spray …, backspin … | apex …, end … s | LANDED 265 ft, Fair | Squared contact: e …, M_eff …, q … | sim … ms (… steps), sweep … ms (… casts)`.
+
+### Tests (pure Luau: Studio + Lune CLI)
+- **`BattedBallImpact.spec`:**
+  - the batted-ball-speed formula, and wood-bat q;
+  - restitution along the normal and no energy creation (400 random collisions);
+  - e·v rebound off a very heavy bat;
+  - the rolling condition, and Coulomb's limit;
+  - sweet spot vs. tip vs. handle;
+  - under vs. topped (launch and spin sign);
+  - incoming spin retention, and early/late direction;
+  - glancing, zero and degenerate inputs;
+  - the power knobs and energy cap, and contact descriptions.
+- **`BattedBallFlight.spec`:**
+  - closed-form vacuum projectile, drag-only and Magnus-only (circle) solutions;
+  - the spin-decay identity;
+  - drag < vacuum, and backspin > none > topspin (carry, apex, lift), plus sidespin;
+  - 120 vs. 960 Hz convergence (< 1 mm);
+  - frame-rate independence, and bit-identical reconstruction through encode/decode;
+  - the Statcast plausibility band;
+  - extreme launches staying finite and within budget.
+- **`BattedBallLanding.spec`:**
+  - analytic vacuum landing, and carry = free-flight landing on flat ground;
+  - thin-wall anti-tunneling at 300 mph (and proof that naive 60 Hz sampling misses);
+  - a wall giving Obstacle with no carry, and a ball clearing the fence;
+  - raised stands, and roof → Ceiling;
+  - rulebook fair/foul, marker poles and bases, and rejection of bad markers;
+  - provisional infield calls, and NoImpact with projection;
+  - coarse+fine equal to a brute-force sweep (40 random scenes);
+  - lane-position independence, and the cast budget.
+- **`BattedBallContact.spec`** (real swings against real pitches):
+  - squared-up liners;
+  - under / center / topped flights;
+  - early/late spray for right- **and** left-handed batters;
+  - quality–EV rank correlation over 160 random swings;
+  - sweet spot vs. end of bat vs. handle;
+  - glancing and jammed contact;
+  - the beginner power band (200–330 ft best), and simulator-scale power (4× EV, thin air) staying within budget and under the energy cap;
+  - the flight starting exactly at the pitch's contact position;
+  - client/server bit-identical launches.
+- **`BattedBallLifecycle.spec`:**
+  - exactly-once resolution at the impact time at 60 fps and with 2.5 s hitches;
+  - duplicate launches refused;
+  - cancel without a result;
+  - a 240 s pitching loop with every pitch hit (no windup while a ball is in the air, and the loop keeps pitching);
+  - a reset mid-flight keeping the lane paused, and leaving cancelling and unpausing;
+  - a **Studio-only** test that the playback leaves no Instances behind.
+
+### Playtesting Phase 3A in Studio
+1. **Markers.** Optionally add `LeftFoulPole` / `RightFoulPole` (or `FirstBase` / `ThirdBase`) parts under `Workspace.GameplayMarkers` or in `Workspace.Stadium`. Press Play and check Output for `[BattedBall] Lane1 field frame: foul lines from ...`.
+2. **First hit.** Aim slightly under the ball (about a ball radius) and hit it. The ball should leave the bat from the contact point without a visible jump, fly out with a trail, come down, rest, and fade. A ring with the distance appears where it landed, and the headline shows the distance.
+3. **Contact variety.** Compare:
+   - aiming at the ball's center: a low liner;
+   - aiming under it: a fly ball;
+   - aiming over it: a grounder;
+   - swinging early or late: the ball goes to the pull side or the opposite field.
+4. **Debug overlay.** Press F7. Check that:
+   - the dots follow the visible ball;
+   - the orange predicted impact matches where it lands;
+   - the `HIT` line goes flying → resolved;
+   - the outcome line's "client flight at that time" sits at the server's impact point.
+5. **Walls and fouls.** Hit balls toward the fence or into foul territory and check `OFF THE WALL` and `FOUL` outcomes. Check that the measured carry only appears for ground landings.
+6. **Pitching loop.** Take several hits in a row. The next pitch's windup should begin only about 1.5 s after the previous ball came down.
+7. **Interrupted flights.** Reset mid-flight: the ball keeps flying, and pitching resumes after it lands. With two players (Test > Clients and Servers), check that the other client sees the same flight, and that leaving mid-flight removes the ball for everyone.
+8. **Output.** Check the `[BattedBall]` log lines, including the server's `sim … ms` and `sweep … ms` timings.
+
+### Needs Studio (not verified from the CLI)
+- `Workspace:Spherecast` against the real stadium:
+  - that the field, walls and stands are collidable (with `RespectCanCollide = true`, a decorative `CanCollide = false` surface is passed through; tag invisible collision parts or adjust the filter);
+  - that surface normals classify as expected;
+  - that nothing unexpected (e.g. invisible trigger volumes, the default 512-stud `Baseplate`) is hit first.
+- Real stadium geometry, marker names and foul-pole placement.
+- Visual continuity at contact, and the ball's readability at distance from the fixed batting camera.
+- Server cost per hit on Roblox hardware (logged per hit), and the client frame hitch at contact (≈4 ms in Lune).
+- Message ordering and the prediction adopt/replace behavior under real latency.
+- Late joiners don't receive a ball that is already in flight. There is no snapshot yet, unlike pitches.

@@ -50,13 +50,19 @@ local function readLane(folder: Instance)
 	if typeof(plate) ~= "Vector3" or typeof(pitcher) ~= "Vector3" then
 		return
 	end
-	local release = folder:GetAttribute(attrs.ReleasePoint)
-	local batter = folder:GetAttribute(attrs.BatterGround)
+	local function optional(name: string): Vector3?
+		local value = folder:GetAttribute(name)
+		return if typeof(value) == "Vector3" then value else nil
+	end
 	local geometry = LaneGeometry.new({
 		plateGround = plate,
 		pitcherGround = pitcher,
-		releasePoint = if typeof(release) == "Vector3" then release else nil,
-		batterGround = if typeof(batter) == "Vector3" then batter else nil,
+		releasePoint = optional(attrs.ReleasePoint),
+		batterGround = optional(attrs.BatterGround),
+		leftFoulPole = optional(attrs.LeftFoulPole),
+		rightFoulPole = optional(attrs.RightFoulPole),
+		firstBase = optional(attrs.FirstBase),
+		thirdBase = optional(attrs.ThirdBase),
 	})
 	geometries[folder.Name] = geometry
 	for _, listener in geometryListeners do
@@ -151,7 +157,7 @@ function PitchVisualController.start()
 	local function watchLane(folder: Instance)
 		readLane(folder)
 		folder.AttributeChanged:Connect(function(name)
-			if name ~= PitchNet.LaneAttributes.State and name ~= PitchNet.LaneAttributes.BatterUserId then
+			if not PitchNet.RuntimeLaneAttributes[name] then
 				readLane(folder)
 			end
 		end)

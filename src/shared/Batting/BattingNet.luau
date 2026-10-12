@@ -33,6 +33,7 @@ export type SwingResultPayload = {
 	aimY: number?,
 	pitchId: number?,
 	contact: ContactQuality.ContactResult?,
+	hitId: number?, -- batted-ball id (BattedBallNet) when the contact launched a ball
 	missReason: SwingResolver.MissReason?,
 	missAmount: number?, -- seconds for Early/Late, studs for the other reasons
 	timingErrorSeconds: number?,

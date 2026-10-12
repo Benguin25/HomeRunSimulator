@@ -26,8 +26,21 @@ PitchNet.LaneAttributes = {
 	PitcherGround = "PitcherGround",
 	ReleasePoint = "ReleasePoint", -- only set when an explicit release marker exists
 	BatterGround = "BatterGround",
+	-- Optional field markers (batted-ball foul lines); only set when found.
+	LeftFoulPole = "LeftFoulPole",
+	RightFoulPole = "RightFoulPole",
+	FirstBase = "FirstBase",
+	ThirdBase = "ThirdBase",
 	State = "State",
 	BatterUserId = "BatterUserId",
+	HitState = "HitState", -- batted-ball lifecycle state (Phase 3A), for debugging
+}
+
+-- Attributes that change during play and do not affect lane geometry.
+PitchNet.RuntimeLaneAttributes = {
+	[PitchNet.LaneAttributes.State] = true,
+	[PitchNet.LaneAttributes.BatterUserId] = true,
+	[PitchNet.LaneAttributes.HitState] = true,
 }
 
 PitchNet.Messages = {

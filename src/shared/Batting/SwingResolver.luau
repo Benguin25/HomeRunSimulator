@@ -91,7 +91,7 @@ function SwingResolver.resolve(geometry: LaneGeometry.Geometry, flight: Pitch.Fl
 	if hit then
 		local ballVelocity = PitchPhysics.sampleVelocity(flight.trajectory, hit.time - releaseTime)
 		resolution.contact =
-			ContactQuality.evaluate(geometry, swing, hit, ballVelocity, flight.params.radius, releaseTime, ideal)
+			ContactQuality.evaluate(geometry, swing, hit, ballVelocity, flight.params.radius, releaseTime, ideal, flight.data.spin)
 		return resolution
 	end
 

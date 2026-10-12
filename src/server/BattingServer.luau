@@ -3,7 +3,9 @@
 -- validates it (SwingValidator), rebuilds the swing at the validated time and
 -- resolves it against the lane's stored deterministic pitch trajectory
 -- (SwingResolver). On contact the pitch is ended through PitchServer so it can
--- never also be called a strike. Every outcome is broadcast once.
+-- never also be called a strike, and the batted ball is launched through
+-- BattedBallServer (only if the pitch was still active, so one contact can
+-- never launch two balls). Every outcome is broadcast once.
 --
 -- Clients never report contact, quality or ball positions; anything they
 -- predict locally is overwritten by this result.
@@ -22,6 +24,7 @@ local SwingModel = require(Batting.SwingModel)
 local SwingResolver = require(Batting.SwingResolver)
 local SwingValidator = require(Batting.SwingValidator)
 
+local BattedBallServer = require(script.Parent.BattedBallServer)
 local PitchServer = require(script.Parent.PitchServer)
 
 local BattingServer = {}
@@ -106,7 +109,9 @@ local function onSwingRequest(player: Player, seq: any, clientTime: any, aimX: a
 			local contact = result.contact
 			if contact then
 				payload.contact = contact
-				PitchServer.resolveContact(laneId :: string, active.data.id, contact.contactTime, BattingNet.ContactAbortReason)
+				if PitchServer.resolveContact(laneId :: string, active.data.id, contact.contactTime, BattingNet.ContactAbortReason) then
+					payload.hitId = BattedBallServer.launch(laneId :: string, active.data.id, player, contact)
+				end
 			end
 		end
 	end
