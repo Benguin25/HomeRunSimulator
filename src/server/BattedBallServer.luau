@@ -12,8 +12,6 @@
 -- The stadium is static, so the whole outcome is known at launch; it is
 -- revealed on schedule by HitLifecycle (exactly once, robust to frame hitches).
 
-local CollectionService = game:GetService("CollectionService")
-local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 local Workspace = game:GetService("Workspace")
@@ -35,6 +33,7 @@ local GameplayServer = require(script.Parent.GameplayServer)
 local ProgressionServer = require(script.Parent.ProgressionServer)
 local ProgressionRules = require(Shared.Progression.ProgressionRules)
 
+local WorldCollision = require(script.Parent.Worlds.WorldCollision)
 local BattedBallServer = {}
 
 type LaneHits = {
@@ -72,30 +71,6 @@ end
 
 -- Everything the ball must not hit: players, markers, client-only visuals,
 -- tagged parts. Non-collidable parts are skipped through RespectCanCollide.
-local function raycastParams(): RaycastParams
-	local cfg = BattedBallConfig.Collision
-	local exclude: { Instance } = {}
-	for _, player in Players:GetPlayers() do
-		if player.Character then
-			table.insert(exclude, player.Character)
-		end
-	end
-	for _, name in cfg.IgnoreWorkspaceChildren do
-		local child = Workspace:FindFirstChild(name)
-		if child then
-			table.insert(exclude, child)
-		end
-	end
-	for _, tagged in CollectionService:GetTagged(cfg.IgnoreTag) do
-		table.insert(exclude, tagged)
-	end
-	local params = RaycastParams.new()
-	params.FilterType = Enum.RaycastFilterType.Exclude
-	params.FilterDescendantsInstances = exclude
-	params.RespectCanCollide = cfg.RespectCanCollide
-	return params
-end
-
 local function workspaceCaster(params: RaycastParams): LandingDetector.Caster
 	return function(origin: Vector3, displacement: Vector3, radius: number): LandingDetector.CastHit?
 		local result = Workspace:Spherecast(origin, radius, displacement, params)
@@ -222,7 +197,7 @@ function BattedBallServer.launch(laneId: string, pitchId: number, player: Player
 	local t0 = os.clock()
 	local flight = BattedBall.buildFlight(lane.frame, launch)
 	local t1 = os.clock()
-	local outcome = LandingDetector.evaluate(flight, workspaceCaster(raycastParams()))
+	local outcome = LandingDetector.evaluate(flight, workspaceCaster(WorldCollision.params(laneId)))
 	local t2 = os.clock()
 	stats[hitId] = {
 		impact = impact,

@@ -92,6 +92,9 @@ local function measure(sample: Sample, level: number): Measurement
 		outcome = outcome,
 	}
 end
+Analysis.profiles = profiles
+Analysis.inputs = inputs
+Analysis.measure = measure
 function Analysis.run(): any
 	local started = os.clock()
 	local report: any = {

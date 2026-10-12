@@ -3,9 +3,12 @@
 local Config = require(script.Parent.ProgressionConfig)
 local Rules = require(script.Parent.ProgressionRules)
 local Landing = require(script.Parent.Parent.BattedBall.LandingDetector)
+local Worlds = require(script.Parent.Parent.Worlds.WorldRules)
 local Progression = {}
 export type Award = { hitId: number, coins: number, reason: string }
 export type Snapshot = {
+	worlds: Worlds.State,
+	worldUnlock: { hitId: number, ids: { string } }?,
 	schemaVersion: number,
 	version: number,
 	coins: number,
@@ -17,6 +20,8 @@ export type Snapshot = {
 	award: Award?,
 }
 export type State = {
+	worlds: Worlds.State,
+	worldUnlock: { hitId: number, ids: { string } }?,
 	coins: number,
 	earnedCoins: number,
 	powerLevel: number,
@@ -30,6 +35,7 @@ export type State = {
 export type PurchaseResult = { ok: boolean, reason: string }
 function Progression.new(): State
 	return {
+		worlds = Worlds.new(),
 		coins = 0,
 		earnedCoins = 0,
 		powerLevel = 0,
@@ -43,6 +49,16 @@ function Progression.new(): State
 end
 function Progression.snapshot(state: State): Snapshot
 	return {
+		worlds = {
+			currentWorld = state.worlds.currentWorld,
+			unlockedWorlds = table.clone(state.worlds.unlockedWorlds),
+			qualifyingBestMeters = state.worlds.qualifyingBestMeters,
+			lastTravelSequence = state.worlds.lastTravelSequence,
+			lastTravelAt = state.worlds.lastTravelAt,
+		},
+		worldUnlock = if state.worldUnlock
+			then { hitId = state.worldUnlock.hitId, ids = table.clone(state.worldUnlock.ids) }
+			else nil,
 		schemaVersion = Config.SchemaVersion,
 		version = state.version,
 		coins = state.coins,
@@ -77,8 +93,26 @@ function Progression.resolve(state: State, hitId: number, outcome: Landing.Outco
 	state.coins += amount
 	state.earnedCoins += amount
 	state.award = { hitId = hitId, coins = amount, reason = reason }
+	local unlocked = Worlds.resolve(state.worlds, outcome)
+	if #unlocked > 0 then
+		state.worldUnlock = { hitId = hitId, ids = unlocked }
+	end
 	state.version += 1
 	return true
+end
+function Progression.travel(
+	state: State,
+	target: any,
+	sequence: any,
+	expectedWorld: any,
+	now: number,
+	context: Worlds.Context
+): Worlds.Result
+	local result = Worlds.travel(state.worlds, target, sequence, expectedWorld, now, context)
+	if result.ok then
+		state.version += 1
+	end
+	return result
 end
 function Progression.purchase(
 	state: State,

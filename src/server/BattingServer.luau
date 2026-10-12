@@ -31,6 +31,8 @@ local GameplayServer = require(script.Parent.GameplayServer)
 local BattingServer = {}
 
 local states: { [Player]: SwingValidator.PlayerState } = {}
+local assignedAt: { [Player]: number } = {}
+local assignmentConnections: { [Player]: RBXScriptConnection } = {}
 local resultEvent: RemoteEvent
 
 local debugLogging = RunService:IsStudio() and BattingConfig.Debug.LogSwingsToOutput
@@ -59,7 +61,15 @@ local function log(player: Player, payload: BattingNet.SwingResultPayload, resol
 	)
 end
 
-local function onSwingRequest(player: Player, seq: any, clientTime: any, aimX: any, aimY: any, pitchId: any)
+local function onSwingRequest(
+	player: Player,
+	seq: any,
+	clientTime: any,
+	aimX: any,
+	aimY: any,
+	pitchId: any,
+	requestedLane: any
+)
 	local receiveTime = Workspace:GetServerTimeNow()
 	local state = states[player]
 	if state == nil then
@@ -67,7 +77,14 @@ local function onSwingRequest(player: Player, seq: any, clientTime: any, aimX: a
 	end
 
 	local laneId = player:GetAttribute(PitchNet.PlayerLaneAttribute)
-	local geometry = if typeof(laneId) == "string" and GameplayServer.canSwing(laneId, player) then PitchServer.getGeometry(laneId) else nil
+	local sameAssignment = requestedLane == laneId
+		and typeof(clientTime) == "number"
+		and clientTime >= (assignedAt[player] or math.huge)
+	local geometry = if sameAssignment
+			and typeof(laneId) == "string"
+			and GameplayServer.canSwing(laneId, player)
+		then PitchServer.getGeometry(laneId)
+		else nil
 	local active = if typeof(laneId) == "string" then PitchServer.getActivePitch(laneId) else nil
 
 	local request = SwingValidator.parse(seq, clientTime, aimX, aimY, pitchId)
@@ -111,7 +128,14 @@ local function onSwingRequest(player: Player, seq: any, clientTime: any, aimX: a
 			GameplayServer.swing(player, request.seq, payload.pitchId ~= nil, contact ~= nil)
 			if contact then
 				payload.contact = contact
-				if PitchServer.resolveContact(laneId :: string, active.data.id, contact.contactTime, BattingNet.ContactAbortReason) then
+				if
+					PitchServer.resolveContact(
+						laneId :: string,
+						active.data.id,
+						contact.contactTime,
+						BattingNet.ContactAbortReason
+					)
+				then
 					payload.hitId = BattedBallServer.launch(laneId :: string, active.data.id, player, contact)
 				end
 			end
@@ -150,10 +174,25 @@ function BattingServer.start()
 
 	local function onPlayerAdded(player: Player)
 		states[player] = SwingValidator.newState()
+		assignedAt[player] = Workspace:GetServerTimeNow()
+		assignmentConnections[player] = player
+			:GetAttributeChangedSignal(PitchNet.PlayerLaneAttribute)
+			:Connect(function()
+				assignedAt[player] = Workspace:GetServerTimeNow()
+				local state = states[player]
+				if state then
+					table.clear(state.swingsAtPitch)
+				end
+			end)
 	end
 	Players.PlayerAdded:Connect(onPlayerAdded)
 	Players.PlayerRemoving:Connect(function(player)
-		states[player] = nil
+		states[player], assignedAt[player] = nil, nil
+		local connection = assignmentConnections[player]
+		if connection then
+			connection:Disconnect()
+		end
+		assignmentConnections[player] = nil
 	end)
 	for _, player in Players:GetPlayers() do
 		onPlayerAdded(player)

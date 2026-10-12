@@ -17,6 +17,9 @@ local function apply(value: Data.Snapshot?)
 		end
 	end
 end
+function Controller.accept(value: Data.Snapshot?)
+	apply(value)
+end
 function Controller.onSnapshot(callback: (Data.Snapshot) -> ())
 	table.insert(callbacks, callback)
 	if state.value then

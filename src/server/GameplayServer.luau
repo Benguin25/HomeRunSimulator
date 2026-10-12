@@ -73,6 +73,16 @@ function Server.assign(player: Player, laneId: string)
 	lanes[laneId] = { player = player, gate = Gate.new(player.UserId, nextEpoch(), Workspace:GetServerTimeNow()) }
 	publish(player)
 end
+function Server.release(player: Player, laneId: string)
+	local lane = lanes[laneId]
+	if lane and lane.player == player then
+		lanes[laneId] = nil
+	end
+end
+function Server.travelReady(player: Player, laneId: string): boolean
+	local lane = lanes[laneId]
+	return lane ~= nil and lane.player == player and Gate.canPitch(lane.gate) and alive(player)
+end
 function Server.character(player: Player, laneId: string, ready: boolean)
 	local lane = lanes[laneId]
 	if not lane or lane.player ~= player then

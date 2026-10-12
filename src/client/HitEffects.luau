@@ -143,7 +143,16 @@ local function spawnRing(position: Vector3, axis: Vector3, maxDiameter: number, 
 	})
 end
 
-local function spawnParticles(position: Vector3, normal: Vector3, amount: number, color: Color3, speed: NumberRange, spread: number, lifetime: NumberRange, size: number)
+local function spawnParticles(
+	position: Vector3,
+	normal: Vector3,
+	amount: number,
+	color: Color3,
+	speed: NumberRange,
+	spread: number,
+	lifetime: NumberRange,
+	size: number
+)
 	if amount <= 0 then
 		return
 	end
@@ -186,7 +195,10 @@ function HitEffects.playImpact(point: Vector3, normal: Vector3, direction: Vecto
 	if cfg.RingEnabled and tier ~= "Weak" then
 		spawnRing(point, direction or normal, studs(cfg.RingMaxMeters * intensity), cfg.RingSeconds)
 	end
-	local sparks = if tier == "Crushed" then cfg.SparksCrushed elseif tier == "Solid" then cfg.SparksSolid else cfg.SparksWeak
+	local sparks = if tier == "Crushed"
+		then cfg.SparksCrushed
+		elseif tier == "Solid" then cfg.SparksSolid
+		else cfg.SparksWeak
 	spawnParticles(
 		point,
 		normal,
@@ -254,7 +266,16 @@ local function onRender()
 	end
 end
 
+function HitEffects.clear()
+	for _, effect in effects do
+		effect.destroy()
+	end
+	table.clear(effects)
+end
 function HitEffects.start()
+	local shared = game:GetService("ReplicatedStorage"):WaitForChild("Shared")
+	local net = require(shared.Pitching.PitchNet)
+	game:GetService("Players").LocalPlayer:GetAttributeChangedSignal(net.PlayerLaneAttribute):Connect(HitEffects.clear)
 	folder = Instance.new("Folder")
 	folder.Name = "HitEffects"
 	folder.Parent = Workspace

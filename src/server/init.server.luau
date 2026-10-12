@@ -25,6 +25,7 @@ if RunService:IsStudio() and PitchConfig.Debug.Enabled and PitchConfig.Debug.Run
 	end
 end
 
+require(script.Worlds.WorldRegistry).initialize()
 ProgressionServer.start()
 GameplayServer.start()
 PitchServer.start()

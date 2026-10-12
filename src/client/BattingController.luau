@@ -44,6 +44,7 @@ local BattingPresentation = require(script.Parent.BattingPresentation)
 local CharacterGrip = require(script.Parent.CharacterGrip)
 local PitchVisualController = require(script.Parent.PitchVisualController)
 local ProgressionController = require(script.Parent.ProgressionController)
+local WorldController = require(script.Parent.WorldController)
 
 local BattingController = {}
 
@@ -225,7 +226,7 @@ local function onRender(dt: number)
 end
 
 local function trySwing()
-	if ProgressionController.isOpen() then return end
+	if ProgressionController.isOpen() or WorldController.isOpen() then return end
 	local geo = geometry
 	local lane = laneId
 	if not active or not geo or not lane or not aimInitialized or not BattingCamera.isBattingView() then
@@ -279,7 +280,7 @@ local function trySwing()
 	while #pending > MAX_PENDING do
 		table.remove(pending, 1)
 	end
-	requestEvent:FireServer(seq, now, aimX, aimY, entry.pitchId)
+	requestEvent:FireServer(seq, now, aimX, aimY, entry.pitchId, lane)
 end
 
 local function onSwingResult(payload: BattingNet.SwingResultPayload)
@@ -346,6 +347,7 @@ local function refresh()
 		geometry = geo
 		if changed then
 			BattingPresentation.buildBat(SwingModel.dimensions(geo))
+			table.clear(pending)
 			currentSwing = nil
 			readyPose = nil
 			swingFromPose = nil

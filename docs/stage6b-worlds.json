@@ -1,0 +1,113 @@
+{
+  "assumptions": "Stage 6A input grids; bounded analytic ground, immediate affordable upgrades and travel after a completed hit. Rookie walls/stands excluded. Timings are CLI CPU, not server frame budgets.",
+  "ideal": [
+    {
+      "cpuMs": 8.187500003259629,
+      "feet": 390.0847970535425,
+      "level": 0,
+      "seconds": 4.319178613273978
+    },
+    {
+      "cpuMs": 9.751200006576255,
+      "feet": 452.81694922686916,
+      "level": 1,
+      "seconds": 4.843062520590381
+    },
+    {
+      "cpuMs": 9.979299997212365,
+      "feet": 519.0557946090261,
+      "level": 2,
+      "seconds": 5.3992556323994485
+    },
+    {
+      "cpuMs": 25.792600004933774,
+      "feet": 1735.4077256036435,
+      "level": 20,
+      "seconds": 13.996800645980898
+    },
+    {
+      "cpuMs": 25.756599992746487,
+      "feet": 1803.5197893792158,
+      "level": 21,
+      "seconds": 14.326532403158993
+    },
+    {
+      "cpuMs": 36.07140001258813,
+      "feet": 3151.990129947901,
+      "level": 40,
+      "seconds": 19.243113504002814
+    }
+  ],
+  "profiles": {
+    "Average": {
+      "coins": 5950,
+      "cpuMs": 2494.3225999886636,
+      "earnedCoins": 83659,
+      "level": 19,
+      "unlocks": {
+        "power": {
+          "attempts": 9,
+          "bestFeet": 513.9885524195154,
+          "contacts": 9,
+          "level": 2,
+          "seconds": 57.25155097754207
+        },
+        "sky": {
+          "attempts": 235,
+          "bestFeet": 1763.8682124784737,
+          "contacts": 229,
+          "level": 19,
+          "seconds": 2119.1340713646973
+        }
+      }
+    },
+    "Beginner": {
+      "coins": 10339,
+      "cpuMs": 2561.9858999853022,
+      "earnedCoins": 88048,
+      "level": 19,
+      "unlocks": {
+        "power": {
+          "attempts": 16,
+          "bestFeet": 511.5441501186871,
+          "contacts": 11,
+          "level": 2,
+          "seconds": 79.26206687852915
+        },
+        "sky": {
+          "attempts": 436,
+          "bestFeet": 1763.8141279840224,
+          "contacts": 303,
+          "level": 19,
+          "seconds": 2789.082143756709
+        }
+      }
+    },
+    "Skilled": {
+      "coins": 4584,
+      "cpuMs": 3545.207899995148,
+      "earnedCoins": 82293,
+      "level": 19,
+      "unlocks": {
+        "power": {
+          "attempts": 7,
+          "bestFeet": 521.1646691952468,
+          "contacts": 7,
+          "level": 2,
+          "seconds": 54.132168401975676
+        },
+        "sky": {
+          "attempts": 184,
+          "bestFeet": 1815.5070872904485,
+          "contacts": 184,
+          "level": 19,
+          "seconds": 2423.1624170141536
+        }
+      }
+    }
+  },
+  "requirementsFeet": {
+    "power": 475,
+    "sky": 1750
+  }
+}

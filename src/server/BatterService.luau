@@ -14,6 +14,9 @@ local BattedBallServer = require(script.Parent.BattedBallServer)
 local PitchServer = require(script.Parent.PitchServer)
 local GameplayServer = require(script.Parent.GameplayServer)
 
+local ProgressionServer = require(script.Parent.ProgressionServer)
+local Worlds = require(script.Parent.Worlds.WorldRegistry)
+local Selection = require(ReplicatedStorage.Shared.Worlds.LaneSelection)
 local BatterService = {}
 
 local laneBatter: { [string]: Player } = {}
@@ -71,7 +74,13 @@ local function onCharacterAdded(player: Player, character: Model)
 
 	local humanoid = character:WaitForChild("Humanoid", 10)
 	local root = character:WaitForChild("HumanoidRootPart", 10)
-	if not humanoid or not root or character.Parent == nil or player.Character ~= character then
+	if
+		not humanoid
+		or not root
+		or character.Parent == nil
+		or player.Character ~= character
+		or getLaneOf(player) ~= laneId
+	then
 		return
 	end
 	assert(humanoid:IsA("Humanoid"))
@@ -108,15 +117,26 @@ local function assignLane(player: Player, laneId: string)
 end
 
 local function tryAssign(player: Player): boolean
-	for _, laneId in PitchServer.getLaneIds() do
-		if not laneBatter[laneId] then
-			assignLane(player, laneId)
-			return true
-		end
+	local laneId =
+		Selection.free(PitchServer.getLaneIds(), laneBatter, Worlds.worldForLane, ProgressionServer.world(player))
+	if not laneId then
+		return false
 	end
-	return false
+	assignLane(player, laneId)
+	return true
 end
 
+local function drainWaiting()
+	local index = 1
+	while index <= #waiting do
+		local player = waiting[index]
+		if not player.Parent or tryAssign(player) then
+			table.remove(waiting, index)
+		else
+			index += 1
+		end
+	end
+end
 local function onPlayerAdded(player: Player)
 	playerConnections[player] = {
 		player.CharacterAdded:Connect(function(character)
@@ -131,6 +151,8 @@ local function onPlayerAdded(player: Player)
 			end
 		end),
 	}
+	player:SetAttribute("CurrentWorld", ProgressionServer.world(player))
+	Worlds.visibility(player, nil, ProgressionServer.world(player))
 	if not tryAssign(player) then
 		table.insert(waiting, player)
 	end
@@ -156,14 +178,63 @@ local function onPlayerRemoving(player: Player)
 		BattedBallServer.cancelLane(laneId, "BatterLeft")
 		PitchServer.stopLane(laneId, "BatterLeft")
 		PitchServer.setBatter(laneId, nil)
-		local nextPlayer = table.remove(waiting, 1)
-		if nextPlayer then
-			assignLane(nextPlayer, laneId)
-		end
+		GameplayServer.release(player, laneId)
+		drainWaiting()
 	end
 end
 
+-- Non-yielding transaction: select destination first; never abandon a hit.
+function BatterService.travel(player: Player, target: any, sequence: any, expectedWorld: any)
+	local oldLane = getLaneOf(player)
+	local destination: string? = nil
+	if typeof(target) == "string" then
+		destination = Selection.free(PitchServer.getLaneIds(), laneBatter, Worlds.worldForLane, target)
+	end
+	local character = player.Character
+	local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+	local previous = ProgressionServer.world(player)
+	local result = ProgressionServer.travel(player, target, sequence, expectedWorld, {
+		characterReady = character ~= nil
+			and character.Parent ~= nil
+			and humanoid ~= nil
+			and humanoid.Health > 0
+			and character:FindFirstChild("HumanoidRootPart") ~= nil,
+		hitBusy = oldLane ~= nil and BattedBallServer.getActiveHit(oldLane) ~= nil,
+		returnReady = oldLane == nil or GameplayServer.travelReady(player, oldLane),
+		laneAvailable = destination ~= nil,
+	})
+	if result.ok then
+		assert(destination, "travel reserved a destination")
+		disconnectAll(characterConnections[player])
+		if oldLane then
+			PitchServer.stopLane(oldLane, "WorldTravel")
+			PitchServer.setBatter(oldLane, nil)
+			GameplayServer.release(player, oldLane)
+			laneBatter[oldLane] = nil
+		end
+		local index = table.find(waiting, player)
+		if index then
+			table.remove(waiting, index)
+		end
+		Worlds.visibility(player, previous, target)
+		player:SetAttribute("CurrentWorld", target)
+		assignLane(player, destination)
+		-- Place synchronously; character readiness/start is deferred and lane-guarded.
+		if character then
+			placeCharacter(destination, character)
+		end
+		ProgressionServer.publish(player)
+		drainWaiting()
+	end
+	return ProgressionServer.snapshot(player), result
+end
 function BatterService.start()
+	local runtime = Instance.new("Folder")
+	runtime.Name = "WorldRuntime"
+	local travel = Instance.new("RemoteFunction")
+	travel.Name, travel.Parent = "Travel", runtime
+	travel.OnServerInvoke = BatterService.travel
+	runtime.Parent = ReplicatedStorage
 	Players.PlayerAdded:Connect(onPlayerAdded)
 	Players.PlayerRemoving:Connect(onPlayerRemoving)
 	for _, player in Players:GetPlayers() do

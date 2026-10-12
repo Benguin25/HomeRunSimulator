@@ -125,8 +125,8 @@ local function requireNode(node)
 end
 
 local testNode = rawget(rawget(serverScriptService, "__children").Server, "__children").Tests
-if process.args[1] == "--balance" or process.args[1] == "--economy" then
-	local analysis = requireNode(if process.args[1] == "--economy" then testNode.ProgressionAnalysis else testNode.BalanceAnalysis)
+if process.args[1] == "--balance" or process.args[1] == "--economy" or process.args[1] == "--worlds" then
+	local analysis = requireNode(if process.args[1] == "--worlds" then testNode.WorldProgressionAnalysis elseif process.args[1] == "--economy" then testNode.ProgressionAnalysis else testNode.BalanceAnalysis)
 	local report = analysis.run()
 	local serde = require("@lune/serde")
 	local json = serde.encode("json", report, true)

@@ -20,6 +20,7 @@ local PitchNet = require(Pitching.PitchNet)
 
 local MarkerResolver = require(script.Parent.MarkerResolver)
 local GameplayServer = require(script.Parent.GameplayServer)
+local Worlds = require(script.Parent.Worlds.WorldRegistry)
 
 local PitchServer = {}
 
@@ -102,6 +103,7 @@ local function createLane(resolved: MarkerResolver.ResolvedLane, lanesFolder: Fo
 	local folder = Instance.new("Folder")
 	folder.Name = resolved.id
 	local attrs = PitchNet.LaneAttributes
+	folder:SetAttribute("WorldId", Worlds.worldForLane(resolved.id))
 	folder:SetAttribute(attrs.PlateGround, resolved.inputs.plateGround)
 	folder:SetAttribute(attrs.PitcherGround, resolved.inputs.pitcherGround)
 	folder:SetAttribute(attrs.ReleasePoint, resolved.inputs.releasePoint)

@@ -1,7 +1,7 @@
 --!strict
 -- Stage 6A is session-only. All economy, power and safety tuning lives here.
 return {
-	SchemaVersion = 1,
+	SchemaVersion = 2,
 	Reward = { ContactCoins = 20, CoinsPerFoot = 0.45, MaxDistanceMeters = 10000 },
 	Power = { Growth = 1.12, MaxLevel = 40, BaseCost = 400, CostGrowth = 1.22 },
 	Limits = {

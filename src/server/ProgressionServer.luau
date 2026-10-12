@@ -5,6 +5,7 @@ local Workspace = game:GetService("Workspace")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Data = require(Shared.Progression.PlayerProgression)
 local Landing = require(Shared.BattedBall.LandingDetector)
+local Worlds = require(Shared.Worlds.WorldRules)
 local Server = {}
 local states: { [Player]: Data.State } = {}
 local update: RemoteEvent
@@ -13,6 +14,30 @@ local function publish(player: Player)
 	if state then
 		update:FireClient(player, Data.snapshot(state))
 	end
+end
+function Server.world(player: Player): string
+	local state = states[player]
+	return if state then state.worlds.currentWorld else "rookie"
+end
+function Server.travel(
+	player: Player,
+	target: any,
+	sequence: any,
+	expectedWorld: any,
+	context: Worlds.Context
+): Worlds.Result
+	local state = states[player]
+	if not state then
+		return { ok = false, reason = "PlayerUnavailable" }
+	end
+	return Data.travel(state, target, sequence, expectedWorld, Workspace:GetServerTimeNow(), context)
+end
+function Server.publish(player: Player)
+	publish(player)
+end
+function Server.snapshot(player: Player): Data.Snapshot?
+	local state = states[player]
+	return if state then Data.snapshot(state) else nil
 end
 function Server.power(player: Player): (number, number)
 	local state = states[player]

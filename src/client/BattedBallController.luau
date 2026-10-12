@@ -75,7 +75,8 @@ end
 
 -- The local batter's own hit on the lane they are batting in.
 local function isOwn(launch: BattedBall.LaunchData): boolean
-	return launch.userId == localPlayer.UserId and launch.laneId == localPlayer:GetAttribute(PitchNet.PlayerLaneAttribute)
+	return launch.userId == localPlayer.UserId
+		and launch.laneId == localPlayer:GetAttribute(PitchNet.PlayerLaneAttribute)
 end
 
 local function frameFor(laneId: string): FieldFrame.Frame?
@@ -107,7 +108,12 @@ local function addEntry(entry: Entry)
 	BattedBallDebugView.showFlight(entry)
 end
 
-local function newEntry(launch: BattedBall.LaunchData, frame: FieldFrame.Frame, predicted: boolean, endTime: number?): Entry
+local function newEntry(
+	launch: BattedBall.LaunchData,
+	frame: FieldFrame.Frame,
+	predicted: boolean,
+	endTime: number?
+): Entry
 	local flight = BattedBall.buildFlight(frame, launch)
 	return {
 		laneId = launch.laneId,
@@ -234,7 +240,12 @@ local function onLaunch(packet: any)
 	if entry and entry.hitId == launch.hitId then
 		return -- duplicate
 	end
-	if entry and entry.hitId == nil and entry.pitchId == launch.pitchId and BattedBall.sameLaunch(entry.launch, launch) then
+	if
+		entry
+		and entry.hitId == nil
+		and entry.pitchId == launch.pitchId
+		and BattedBall.sameLaunch(entry.launch, launch)
+	then
 		-- Prediction confirmed: keep the ball that is already flying.
 		entry.hitId = launch.hitId
 		entry.launch = launch
@@ -328,6 +339,18 @@ local function onRender()
 end
 
 function BattedBallController.start()
+	localPlayer:GetAttributeChangedSignal(PitchNet.PlayerLaneAttribute):Connect(function()
+		local current = localPlayer:GetAttribute(PitchNet.PlayerLaneAttribute)
+		for id, entry in entries do
+			if entry.launch.userId == localPlayer.UserId and id ~= current then
+				removeEntry(id)
+			end
+		end
+		for _, effect in effects do
+			effect.instance:Destroy()
+		end
+		table.clear(effects)
+	end)
 	visualsFolder = Instance.new("Folder")
 	visualsFolder.Name = "BattedBallVisuals"
 	visualsFolder.Parent = Workspace

@@ -20,6 +20,9 @@ local LaneGeometry = require(Pitching.LaneGeometry)
 local PitchConfig = require(Pitching.PitchConfig)
 local Units = require(Pitching.Units)
 
+local Worlds = require(script.Parent.Worlds.WorldRegistry)
+local WorldConfig = require(ReplicatedStorage.Shared.Worlds.WorldConfig)
+
 local MarkerResolver = {}
 
 export type ResolvedLane = {
@@ -283,6 +286,23 @@ function MarkerResolver.resolveLanes(): { ResolvedLane }
 	else
 		for _, root in laneRoots do
 			table.insert(lanes, resolveLane(root.Name, root, markersRoot, stadium))
+		end
+	end
+	for _, lane in lanes do
+		Worlds.register(lane.id, WorldConfig.DefaultId)
+	end
+	Worlds.rookieCatchment(lanes[1].geometry)
+	for _, world in WorldConfig.Worlds do
+		if world.id ~= WorldConfig.DefaultId then
+			local model = assert(Worlds.model(world.id))
+			local markers = assert(model:FindFirstChild("GameplayMarkers"))
+			for index = 1, world.lanes do
+				local root = assert(markers:FindFirstChild(`Lane{index}`))
+				local id = WorldConfig.laneId(world.id, index)
+				local resolved = resolveLane(id, root, markers, nil)
+				Worlds.register(id, world.id)
+				table.insert(lanes, resolved)
+			end
 		end
 	end
 	return lanes

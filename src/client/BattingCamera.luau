@@ -175,6 +175,8 @@ local function activate(laneId: string)
 	end
 	if activeLaneId ~= laneId then
 		director:reset("lane assigned")
+		occlusionParams, occlusionDistance, lastFocus = nil, math.huge, nil
+		offset = CFrame.identity
 	end
 	activeLaneId = laneId
 	director:setLane(laneId)
