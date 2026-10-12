@@ -233,8 +233,10 @@ PitchConfig.Batter = {
 }
 
 PitchConfig.Debug = {
-	-- Studio-only. Ignored in live servers regardless of this flag.
+	-- Debug UI is available in Studio, hidden until toggled. Published clients
+	-- create no debug UI/bindings unless explicitly opted into development below.
 	Enabled = true,
+	EnableInPublished = false,
 	ToggleKey = "F7",
 	ShowTrajectory = true,
 	ShowStrikeZone = true,

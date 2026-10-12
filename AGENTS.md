@@ -1,6 +1,6 @@
 # Home Run Simulator
 
-Build a satisfying arcade batting loop grounded in deterministic physics. Stages 1–4 are implemented; Stage 5A tunes contact forgiveness and beginner power. The implementation is the source of truth when older documentation disagrees.
+Build a satisfying arcade batting loop grounded in deterministic physics. Stages 1–4 and Stage 5A arcade balance are implemented; Stage 5B adds coordinated pacing and session-only records/statistics. The implementation is the source of truth when older documentation disagrees.
 
 ## Architecture and constraints
 
@@ -12,6 +12,8 @@ Build a satisfying arcade batting loop grounded in deterministic physics. Stages
 - `BattedBall.computeLaunch` and `ImpactModel` are shared by client prediction and server authority. Flight uses fixed-step 120 Hz RK4 with gravity, drag, Magnus lift and spin decay. Keep nearby inputs continuous and results deterministic.
 - `LandingDetector` performs authoritative first-impact sweeps. Flat-field carry projections are benchmarks, not stadium landing outcomes.
 - `CameraDirector`, `HitPresentation`, and client effects/HUD own Stage 4 presentation. Preserve their behavior, animations, aiming responsiveness and networking when tuning contact.
+- `GameplayServer` integrates validated server events with pure `SessionStats`, `RecordRules` and `ReturnGate`. Records use confirmed, non-provisional fair ground carry only. All accepted contacts remain successful hits. Keep snapshot versions and hit/assignment deduplication.
+- Production hit completion waits for validated camera readiness; `HitLifecycle`'s fixed hold is a legacy fallback. No client message may resolve/cancel a flight, report distance, or unlock a lane before server resolution and the minimum return interval.
 - SI units inside impact/flight; world studs at Roblox boundaries. Use the existing `Units`/`FieldFrame` conversions.
 
 ## Workflow
@@ -24,4 +26,4 @@ Build a satisfying arcade batting loop grounded in deterministic physics. Stages
 6. Update README with changes, measured results, tradeoffs and Studio playtest instructions. Do not claim visual/gameplay success from CLI tests alone.
 7. Do not commit, push, or overwrite Studio-managed assets without explicit authorization.
 
-Do not add coins, shops, upgrades, stadium unlocking, rebirths or personal-best tracking during Stage 5A. Future tuning hooks are configuration only.
+Do not add coins, shops, upgrades, stadium unlocking, rebirths, DataStore persistence or permanent progression during Stage 5B. Session personal bests and distance milestones are informational; Stage 5A power tuning stays unchanged.

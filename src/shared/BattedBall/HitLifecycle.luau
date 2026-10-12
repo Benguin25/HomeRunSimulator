@@ -32,6 +32,9 @@ export type Hooks = {
 	onResolved: ((lifecycle: HitLifecycle, hit: ActiveHit) -> ())?,
 	onFinished: ((lifecycle: HitLifecycle, hit: ActiveHit) -> ())?,
 	onCancelled: ((lifecycle: HitLifecycle, hit: ActiveHit, reason: string) -> ())?,
+	-- Optional coordinated production return gate. Legacy/test callers can
+	-- retain the original clock-driven hold by leaving this unset.
+	canFinish: ((lifecycle: HitLifecycle, hit: ActiveHit) -> boolean)?,
 }
 
 export type HitLifecycle = typeof(setmetatable(
@@ -102,7 +105,8 @@ function HitLifecycle.update(self: HitLifecycle, now: number)
 			hook(self, hit)
 		end
 	end
-	if self.state == "Resolved" and now >= self.finishTime and self.hit == hit then
+	if self.state == "Resolved" and now >= self.finishTime and self.hit == hit
+		and (self.hooks.canFinish == nil or self.hooks.canFinish(self, hit)) then
 		self.hit = nil
 		self.state = "Idle"
 		self.finished += 1

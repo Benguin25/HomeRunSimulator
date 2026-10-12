@@ -8,6 +8,7 @@
 -- pure-Luau test runner can load it.
 
 local PresentationConfig = {}
+local GameplayConfig = require(script.Parent.Parent.Gameplay.GameplayConfig)
 
 -- Camera state timing (seconds). The landing hold + return must fit inside the
 -- server's post-landing hold (BattedBallConfig.Lifecycle.ResultHoldSeconds) so
@@ -19,9 +20,9 @@ PresentationConfig.Timing = {
 	-- Blend from the batting framing into the follow camera.
 	ContactTransitionSeconds = 0.4,
 	-- Camera holds on the first impact this long before returning.
-	LandingHoldSeconds = 1.3,
+	LandingHoldSeconds = GameplayConfig.Pacing.LandingHoldSeconds,
 	-- Blend back to the batting framing.
-	ReturnSeconds = 0.85,
+	ReturnSeconds = GameplayConfig.Pacing.ReturnSeconds,
 	-- The return path arcs up by this much per 100 m of travel (keeps it off the field / fences).
 	ReturnArcMetersPer100 = 6,
 	ReturnArcMaxMeters = 12,

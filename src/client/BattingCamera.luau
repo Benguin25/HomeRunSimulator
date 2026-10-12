@@ -9,8 +9,8 @@
 -- Batting -> ContactTransition -> BallFollow -> Landing -> Returning cycle
 -- from the deterministic flight; this module feeds it the batting framing,
 -- applies its pose, and keeps the follow camera out of walls with one
--- raycast per frame. BattedBallController reports hit events here; nothing
--- camera-related is ever networked.
+-- raycast per frame. BattedBallController reports hit events here. Stage 5B
+-- acknowledges readiness through GameplayController; camera poses stay local.
 --
 -- `setOffset` is the extension point for small effects (nudges) on top of
 -- whatever pose is shown.
@@ -235,6 +235,20 @@ end
 
 function BattingCamera.getActiveLaneId(): string?
 	return activeLaneId
+end
+
+function BattingCamera.isReady(): boolean
+	return bound and blendFrom == nil and director:isBattingView() and director:getHit() == nil
+end
+
+function BattingCamera.skipResult(laneId: string, pitchId: number): boolean
+	return director:skipResult(serverNow(), laneId, pitchId)
+end
+
+function BattingCamera.recoverPresentation(laneId: string, pitchId: number)
+	-- Server has already resolved this hit. Only the camera presentation ends;
+	-- BattedBallController continues rendering the authoritative ball/result.
+	director:cancel(serverNow(), laneId, pitchId, "server requested return")
 end
 
 ---------------------------------------------------------------------------

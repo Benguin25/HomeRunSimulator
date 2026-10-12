@@ -226,6 +226,16 @@ local function startReturn(self: CameraDirector, at: number, event: string)
 	setState(self, "Returning", at, event)
 end
 
+-- Presentation-only skip. Requires a confirmed result; never changes a flight
+-- or outcome. Duplicate approvals during a return do not restart its blend.
+function CameraDirector.skipResult(self: CameraDirector, now: number, laneId: string, pitchId: number): boolean
+	local hit = self.hit
+	if not hit or not matches(hit, laneId, pitchId) or not hit.confirmed or hit.outcome == nil
+		or self.state ~= "Landing" then return false end
+	startReturn(self, now, "result skipped")
+	return true
+end
+
 -- Drops the hit (prediction rejected, hit cancelled). `laneId` nil = whatever
 -- is presented (respawn). Before contact nothing visible happens; after it
 -- the camera returns.

@@ -26,6 +26,7 @@ local SwingValidator = require(Batting.SwingValidator)
 
 local BattedBallServer = require(script.Parent.BattedBallServer)
 local PitchServer = require(script.Parent.PitchServer)
+local GameplayServer = require(script.Parent.GameplayServer)
 
 local BattingServer = {}
 
@@ -66,7 +67,7 @@ local function onSwingRequest(player: Player, seq: any, clientTime: any, aimX: a
 	end
 
 	local laneId = player:GetAttribute(PitchNet.PlayerLaneAttribute)
-	local geometry = if typeof(laneId) == "string" then PitchServer.getGeometry(laneId) else nil
+	local geometry = if typeof(laneId) == "string" and GameplayServer.canSwing(laneId, player) then PitchServer.getGeometry(laneId) else nil
 	local active = if typeof(laneId) == "string" then PitchServer.getActivePitch(laneId) else nil
 
 	local request = SwingValidator.parse(seq, clientTime, aimX, aimY, pitchId)
@@ -107,6 +108,7 @@ local function onSwingRequest(player: Player, seq: any, clientTime: any, aimX: a
 			payload.timingErrorSeconds = result.timingErrorSeconds
 			payload.minGap = if result.minGap < math.huge then result.minGap else nil
 			local contact = result.contact
+			GameplayServer.swing(player, request.seq, payload.pitchId ~= nil, contact ~= nil)
 			if contact then
 				payload.contact = contact
 				if PitchServer.resolveContact(laneId :: string, active.data.id, contact.contactTime, BattingNet.ContactAbortReason) then
@@ -117,6 +119,9 @@ local function onSwingRequest(player: Player, seq: any, clientTime: any, aimX: a
 	end
 
 	-- Malformed requests are only answered to the sender (nothing to show others).
+	if payload.accepted and request then
+		GameplayServer.swing(player, request.seq, payload.pitchId ~= nil, payload.hitId ~= nil)
+	end
 	if request then
 		resultEvent:FireAllClients(payload)
 	else

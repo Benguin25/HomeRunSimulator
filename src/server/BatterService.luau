@@ -12,6 +12,7 @@ local PitchNet = require(Pitching.PitchNet)
 
 local BattedBallServer = require(script.Parent.BattedBallServer)
 local PitchServer = require(script.Parent.PitchServer)
+local GameplayServer = require(script.Parent.GameplayServer)
 
 local BatterService = {}
 
@@ -81,12 +82,14 @@ local function onCharacterAdded(player: Player, character: Model)
 			return
 		end
 		placeCharacter(laneId, character)
+		GameplayServer.character(player, laneId, true)
 		PitchServer.startLane(laneId)
 	end)
 
 	characterConnections[player] = {
 		humanoid.Died:Connect(function()
 			if getLaneOf(player) == laneId then
+				GameplayServer.character(player, laneId, false)
 				PitchServer.stopLane(laneId, "BatterDied")
 			end
 		end),
@@ -97,6 +100,7 @@ local function assignLane(player: Player, laneId: string)
 	laneBatter[laneId] = player
 	player:SetAttribute(PitchNet.PlayerLaneAttribute, laneId)
 	PitchServer.setBatter(laneId, player.UserId)
+	GameplayServer.assign(player, laneId)
 	local character = player.Character
 	if character then
 		task.spawn(onCharacterAdded, player, character)
@@ -122,6 +126,7 @@ local function onPlayerAdded(player: Player)
 			disconnectAll(characterConnections[player])
 			local laneId = getLaneOf(player)
 			if laneId then
+				GameplayServer.character(player, laneId, false)
 				PitchServer.stopLane(laneId, "CharacterRemoved")
 			end
 		end),

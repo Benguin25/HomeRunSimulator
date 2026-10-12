@@ -19,6 +19,7 @@ local PitchLane = require(Pitching.PitchLane)
 local PitchNet = require(Pitching.PitchNet)
 
 local MarkerResolver = require(script.Parent.MarkerResolver)
+local GameplayServer = require(script.Parent.GameplayServer)
 
 local PitchServer = {}
 
@@ -145,6 +146,12 @@ local function createLane(resolved: MarkerResolver.ResolvedLane, lanesFolder: Fo
 		onStateChanged = function(_lane, state, _now)
 			folder:SetAttribute(attrs.State, state)
 		end,
+		canStartPitch = function()
+			return GameplayServer.canPitch(resolved.id)
+		end,
+		onPitchReleased = function(_, active)
+			GameplayServer.pitch(resolved.id, active.data.id)
+		end,
 		onPitchStarted = function(_lane, active)
 			pitchEvent:FireAllClients(PitchNet.Messages.Start, Pitch.encode(active.data))
 		end,
@@ -232,6 +239,13 @@ function PitchServer.setLanePaused(laneId: string, paused: boolean)
 	local record = lanes[laneId]
 	if record then
 		record.lane:setPaused(paused)
+	end
+end
+
+function PitchServer.resumeAfterHit(laneId: string)
+	local record = lanes[laneId]
+	if record then
+		record.lane:resumeAfterHit(now())
 	end
 end
 

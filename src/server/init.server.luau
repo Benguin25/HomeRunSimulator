@@ -10,6 +10,7 @@ local BattedBallServer = require(script.BattedBallServer)
 local BatterService = require(script.BatterService)
 local BattingServer = require(script.BattingServer)
 local PitchServer = require(script.PitchServer)
+local GameplayServer = require(script.GameplayServer)
 
 if RunService:IsStudio() and PitchConfig.Debug.Enabled and PitchConfig.Debug.RunTestsOnStart then
 	local ok, err = pcall(function()
@@ -23,6 +24,7 @@ if RunService:IsStudio() and PitchConfig.Debug.Enabled and PitchConfig.Debug.Run
 	end
 end
 
+GameplayServer.start()
 PitchServer.start()
 BattedBallServer.start()
 BattingServer.start()

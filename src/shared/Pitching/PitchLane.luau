@@ -29,6 +29,8 @@ export type Hooks = {
 	createPitch: (lane: PitchLane, id: number, windupTime: number, releaseTime: number) -> ActivePitch?,
 	onStateChanged: ((lane: PitchLane, state: State, now: number) -> ())?,
 	onPitchStarted: ((lane: PitchLane, pitch: ActivePitch) -> ())?,
+	canStartPitch: ((lane: PitchLane) -> boolean)?,
+	onPitchReleased: ((lane: PitchLane, pitch: ActivePitch) -> ())?,
 	onPitchCrossed: ((lane: PitchLane, pitch: ActivePitch) -> ())?,
 	onPitchFinished: ((lane: PitchLane, pitch: ActivePitch) -> ())?,
 	onPitchAborted: ((lane: PitchLane, pitch: ActivePitch, reason: string) -> ())?,
@@ -104,6 +106,17 @@ function PitchLane.setPaused(self: PitchLane, paused: boolean)
 	self.paused = paused
 end
 
+-- A validated post-hit return already supplies the recovery/ready interval.
+-- Resume at Ready now, avoiding a leftover short-hit reset delay. A stopped
+-- lane stays stopped, and an existing pitch is never replaced.
+function PitchLane.resumeAfterHit(self: PitchLane, now: number)
+	self.paused = false
+	if self.pitch == nil and (self.state == "Resetting" or self.state == "Ready" or self.state == "Finished") then
+		self.nextTransitionTime = now
+		self:_setState("Ready", now)
+	end
+end
+
 -- Ends the current pitch immediately (player reset, future batting contact).
 -- Returns true if a pitch was aborted.
 function PitchLane.abortPitch(self: PitchLane, now: number, reason: string): boolean
@@ -146,7 +159,7 @@ function PitchLane._advance(self: PitchLane, now: number): boolean
 	local due = self.nextTransitionTime
 
 	if state == "Ready" then
-		if self.paused or self.pitch ~= nil then
+		if self.paused or self.pitch ~= nil or (self.hooks.canStartPitch and not self.hooks.canStartPitch(self)) then
 			return false
 		end
 		-- Use the actual decision time so a late update never back-dates a windup.
@@ -174,6 +187,10 @@ function PitchLane._advance(self: PitchLane, now: number): boolean
 		local crossTime = self:getCrossServerTime()
 		self.nextTransitionTime = crossTime or (pitch.data.releaseTime + pitch.flight.endTime)
 		self:_setState("Approaching", due)
+		local hook = self.hooks.onPitchReleased
+		if hook then
+			hook(self, pitch)
+		end
 	elseif state == "Approaching" then
 		local pitch = self.pitch :: ActivePitch
 		if pitch.flight.crossTime then

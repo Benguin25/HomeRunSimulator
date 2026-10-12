@@ -142,10 +142,9 @@ BattedBallConfig.FoulLines = {
 
 -- Hit lifecycle (HitLifecycle / BattedBallServer).
 BattedBallConfig.Lifecycle = {
-	-- After the first impact the lane holds this long before the next pitch can
-	-- start. Covers the client's landing hold + camera return
-	-- (PresentationConfig.Timing: 1.3 + 0.85 s) plus a margin, so the next
-	-- windup never begins while the camera is still away (a test enforces it).
+	-- Legacy clock-driven HitLifecycle fallback and comparison tests. Stage 5B
+	-- production passes zero here and waits for its validated camera-return
+	-- gate instead; GameplayConfig.Pacing owns the active loop timings.
 	ResultHoldSeconds = 2.4,
 	-- A client-predicted flight the server never confirms is removed after this.
 	PredictionTimeoutSeconds = 1.25,

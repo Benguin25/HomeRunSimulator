@@ -77,6 +77,7 @@ local swingFromPose: SwingModel.Pose? = nil -- what was on screen when the click
 local pending: { Pending } = {}
 local swungPitchId: number? = nil
 local active = false
+local readinessCheck: (() -> boolean)? = nil
 
 local function serverNow(): number
 	return Workspace:GetServerTimeNow()
@@ -228,6 +229,9 @@ local function trySwing()
 	if not active or not geo or not lane or not aimInitialized or not BattingCamera.isBattingView() then
 		return
 	end
+	if readinessCheck and not readinessCheck() then
+		return
+	end
 	local now = serverNow()
 	-- Local state machine: no new swing until the previous one has recovered.
 	if not SwingModel.isReadyAt(currentSwing, now) then
@@ -351,6 +355,14 @@ local function refresh()
 		geometry = nil
 		setActive(false)
 	end
+end
+
+function BattingController.isSwingReady(): boolean
+	return currentSwing == nil or SwingModel.phaseAt(currentSwing, serverNow()) == "Ready"
+end
+
+function BattingController.setReadinessCheck(check: () -> boolean)
+	readinessCheck = check
 end
 
 function BattingController.start()

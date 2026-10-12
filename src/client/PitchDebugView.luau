@@ -1,5 +1,5 @@
 --!strict
--- Studio-only pitching debug overlay (toggle with PitchConfig.Debug.ToggleKey).
+-- Development pitching debug overlay (toggle with PitchConfig.Debug.ToggleKey).
 -- Draws the strike zone, release point, intended target, actual crossing and
 -- the trajectory, and shows speed / flight time / targeting error in a HUD.
 -- Also compares the client's locally simulated crossing with the server's
@@ -7,6 +7,7 @@
 -- Other systems (batting) add HUD sections and world drawings through
 -- setSection / getWorldFolder so they share the same toggle.
 
+local ContextActionService = game:GetService("ContextActionService")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
@@ -18,6 +19,9 @@ local LaneGeometry = require(Pitching.LaneGeometry)
 local Pitch = require(Pitching.Pitch)
 local PitchConfig = require(Pitching.PitchConfig)
 local PitchPhysics = require(Pitching.PitchPhysics)
+local Shared = Pitching.Parent
+local DebugToggle = require(Shared.Presentation.DebugToggle)
+local GameplayConfig = require(Shared.Gameplay.GameplayConfig)
 
 local PitchVisualController = require(script.Parent.PitchVisualController)
 
@@ -28,7 +32,8 @@ local cfg = PitchConfig.Debug
 local root: Folder
 local hudLabel: TextLabel
 local screenGui: ScreenGui
-local visible = true
+local toggle = DebugToggle.new(false)
+local TOGGLE_ACTION = "HomeRunDebugToggle"
 local pitchFolders: { Folder } = {}
 local lastFlights: { [string]: Pitch.Flight } = {}
 local hudLines: { [string]: string } = {}
@@ -204,14 +209,17 @@ local function onResult(info: PitchVisualController.ResultInfo)
 	)
 end
 
-local function setVisible(value: boolean)
-	visible = value
-	root.Parent = if visible then Workspace else nil
-	screenGui.Enabled = visible
+local function applyVisibility()
+	root.Parent = if toggle.visible then Workspace else nil
+	screenGui.Enabled = toggle.visible and cfg.ShowHud
 end
 
 function PitchDebugView.isEnabled(): boolean
 	return started
+end
+
+function PitchDebugView.isVisible(): boolean
+	return started and toggle.visible
 end
 
 -- Extra HUD text below the pitch lines (RichText allowed). No-op when disabled.
@@ -232,17 +240,28 @@ function PitchDebugView.getWorldFolder(): Folder?
 end
 
 function PitchDebugView.start()
-	if not (RunService:IsStudio() and cfg.Enabled) then
+	if started or not DebugToggle.allowed(RunService:IsStudio(), cfg.Enabled, cfg.EnableInPublished) then
 		return
 	end
+	local ok, key = pcall(function()
+		return (Enum.KeyCode :: any)[cfg.ToggleKey]
+	end)
+	local toggleKey: Enum.KeyCode? = if ok then key else nil
+	if toggleKey == nil or toggleKey == Enum.KeyCode.None
+		or cfg.ToggleKey == GameplayConfig.Hud.StatsKey or cfg.ToggleKey == GameplayConfig.Hud.SkipKey
+		or toggleKey == Enum.KeyCode.Escape then
+		warn("[Debug] Invalid or conflicting debug toggle key; debug UI disabled.")
+		return
+	end
+	toggle = DebugToggle.new(true)
 	started = true
 
 	root = Instance.new("Folder")
 	root.Name = "PitchDebug"
-	root.Parent = Workspace
 
 	screenGui = Instance.new("ScreenGui")
 	screenGui.Name = "PitchDebugHud"
+	screenGui.Enabled = false -- hide before parenting, including the first rendered frame
 	screenGui.ResetOnSpawn = false
 	screenGui.IgnoreGuiInset = false
 	hudLabel = Instance.new("TextLabel")
@@ -266,6 +285,7 @@ function PitchDebugView.start()
 	padding.Parent = hudLabel
 	hudLabel.Parent = screenGui
 	screenGui.Parent = Players.LocalPlayer:WaitForChild("PlayerGui")
+	applyVisibility()
 
 	PitchVisualController.onGeometry(drawZone)
 	PitchVisualController.onPitchStarted(drawPitch)
@@ -276,11 +296,34 @@ function PitchDebugView.start()
 		end
 	end)
 
-	local toggleKey = (Enum.KeyCode :: any)[cfg.ToggleKey]
-	UserInputService.InputBegan:Connect(function(input, processed)
-		if not processed and input.KeyCode == toggleKey then
-			setVisible(not visible)
+	local function onKey(down: boolean)
+		if DebugToggle.input(toggle, down, UserInputService:GetFocusedTextBox() ~= nil) then
+			applyVisibility()
 		end
+	end
+	ContextActionService:BindActionAtPriority(TOGGLE_ACTION, function(_, state)
+		if state == Enum.UserInputState.Begin then
+			onKey(true)
+		elseif state == Enum.UserInputState.End or state == Enum.UserInputState.Cancel then
+			onKey(false)
+		end
+		return if UserInputService:GetFocusedTextBox() then Enum.ContextActionResult.Pass else Enum.ContextActionResult.Sink
+	end, false, Enum.ContextActionPriority.High.Value + 1, toggleKey)
+	-- Studio/CoreGui may mark F7 processed. This dedicated diagnostic key must
+	-- still toggle; ordinary gameplay listeners retain their processed guards.
+	-- The shared edge latch prevents this fallback and the action from doubling.
+	UserInputService.InputBegan:Connect(function(input)
+		if input.KeyCode == toggleKey then
+			onKey(true)
+		end
+	end)
+	UserInputService.InputEnded:Connect(function(input)
+		if input.KeyCode == toggleKey then
+			onKey(false)
+		end
+	end)
+	UserInputService.WindowFocusReleased:Connect(function()
+		DebugToggle.release(toggle)
 	end)
 end
 

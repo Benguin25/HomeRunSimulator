@@ -5,8 +5,8 @@
 --   3. sweeps that flight against the stadium (Workspace:Spherecast) to find
 --      the first impact and measure the outcome,
 --   4. broadcasts the launch record once, pauses the lane's pitching,
---   5. broadcasts the outcome at the impact's server time, holds briefly,
---      then lets the lane pitch again.
+--   5. broadcasts the outcome at the impact's server time, then waits for
+--      GameplayServer's validated camera return before resuming pitching.
 --
 -- The server never creates a ball Part and never trusts client positions.
 -- The stadium is static, so the whole outcome is known at launch; it is
@@ -31,6 +31,7 @@ local ImpactModel = require(BattedBallFolder.ImpactModel)
 local LandingDetector = require(BattedBallFolder.LandingDetector)
 
 local PitchServer = require(script.Parent.PitchServer)
+local GameplayServer = require(script.Parent.GameplayServer)
 
 local BattedBallServer = {}
 
@@ -161,6 +162,7 @@ local function getLane(laneId: string): LaneHits?
 			event:FireAllClients(BattedBallNet.Messages.Launch, BattedBall.encode(hit.launch, hit.outcome.endTime))
 		end,
 		onResolved = function(_, hit)
+			GameplayServer.resolve(laneId, hit.launch.hitId, LandingDetector.toPayload(hit.outcome))
 			setHitState(laneId, "Resolved")
 			event:FireAllClients(BattedBallNet.Messages.Resolved, hit.launch.hitId, laneId, LandingDetector.toPayload(hit.outcome))
 			log(hit)
@@ -168,9 +170,10 @@ local function getLane(laneId: string): LaneHits?
 		onFinished = function(_, hit)
 			stats[hit.launch.hitId] = nil
 			setHitState(laneId, "Idle")
-			PitchServer.setLanePaused(laneId, false)
+			PitchServer.resumeAfterHit(laneId)
 		end,
 		onCancelled = function(_, hit, reason)
+			GameplayServer.cancel(laneId, hit.launch.hitId)
 			stats[hit.launch.hitId] = nil
 			setHitState(laneId, "Idle")
 			PitchServer.setLanePaused(laneId, false)
@@ -179,7 +182,10 @@ local function getLane(laneId: string): LaneHits?
 				print(`[BattedBall] {laneId} hit #{hit.launch.hitId} cancelled ({reason})`)
 			end
 		end,
-	})
+		canFinish = function(_, hit)
+			return GameplayServer.canFinish(laneId, hit.launch.hitId)
+		end,
+	}, 0) -- production waits for validated camera readiness, not a fixed hold
 	local record = { lifecycle = lifecycle, frame = frame }
 	lanes[laneId] = record
 	if debugLogging then
@@ -222,6 +228,7 @@ function BattedBallServer.launch(laneId: string, pitchId: number, player: Player
 		casts = outcome.casts,
 	}
 
+	GameplayServer.launch(laneId, player, hitId, pitchId, flight.exitSpeedMph)
 	if not lane.lifecycle:launch(now(), { launch = launch, flight = flight, outcome = outcome }) then
 		stats[hitId] = nil
 		return nil
