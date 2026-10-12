@@ -98,7 +98,8 @@ local function updated(value: Net.Snapshot)
 	Replica.apply(notices, value)
 	local award = value.stats.award
 	local celebration = Replica.celebration(notices)
-	if value.loop and value.loop.phase == "Returning" then
+	if value.loop and (value.loop.phase == "Returning" or value.loop.presentationSkipped
+		or Controller.wasSkipped(value.loop.laneId, value.loop.pitchId)) then
 		noticeAt = -math.huge -- an approved skip dismisses presentation, never the record
 		return
 	end
@@ -198,11 +199,18 @@ local function render(dt: number)
 	details.GroupTransparency = 1 - panelAlpha
 	local elapsed = os.clock() - noticeAt
 	local alpha = if elapsed < noticeDuration then math.min(elapsed / 0.15, (noticeDuration - elapsed) / 0.25, 1) else 0
-	notice.Visible = not hiddenForDebug and not open and alpha > 0
+	local skipped = loop ~= nil and Controller.wasSkipped(loop.laneId, loop.pitchId)
+	notice.Visible = not hiddenForDebug and not open and not skipped and alpha > 0
 	notice.GroupTransparency = 1 - math.clamp(alpha, 0, 1)
 	noticeStroke.Transparency = 0.8 - 0.3 * noticeIntensity * math.exp(-math.max(0, elapsed) * 4)
 	notice.Position = UDim2.new(1, -16, 0, 160 + 10 * (1 - math.clamp(alpha, 0, 1)))
-	skip.Visible = Controller.canSkip() and not hiddenForDebug
+	local canSkip, waiting = Controller.canSkip(), Controller.isWaiting()
+	skip.Visible = (canSkip or waiting) and not hiddenForDebug
+	skip.Active = canSkip
+	skip.Text = if waiting then "WAITING FOR HIT RESULT..."
+		elseif BattingCamera.getDirector():getState() == "Landing" then `SKIP RESULT [{Config.Hud.SkipKey}]`
+		else `SKIP FLIGHT [{Config.Hud.SkipKey}]`
+	skip.TextColor3 = if waiting then COLORS.muted else COLORS.text
 	debug(loop, v, os.clock())
 end
 function Hud.start()

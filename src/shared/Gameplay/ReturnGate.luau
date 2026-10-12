@@ -17,6 +17,7 @@ export type State = {
 	lastRequest: number,
 	rejection: string,
 	recoverySent: boolean,
+	presentationSkipped: boolean,
 }
 
 function Gate.new(owner: number, epoch: number, now: number): State
@@ -33,6 +34,7 @@ function Gate.new(owner: number, epoch: number, now: number): State
 		lastRequest = -math.huge,
 		rejection = "",
 		recoverySent = false,
+		presentationSkipped = false,
 	}
 end
 
@@ -41,6 +43,7 @@ function Gate.begin(state: State, hitId: number, pitchId: number)
 	state.phase, state.cameraReady = "Flying", false
 	state.resolvedAt, state.notBefore = math.huge, math.huge
 	state.recoverySent = false
+	state.presentationSkipped = false
 	state.rejection = ""
 end
 
@@ -48,14 +51,20 @@ function Gate.resolve(state: State, hitId: number, now: number): boolean
 	if state.hitId ~= hitId or state.phase ~= "Flying" then
 		return false
 	end
-	state.phase, state.resolvedAt = "Resolved", now
-	state.notBefore = now + Config.Pacing.ReturnSeconds
+	state.resolvedAt = now
+	if state.presentationSkipped then
+		state.phase = if state.cameraReady and state.characterReady then "Ready" else "Resolved"
+	else
+		state.phase = "Resolved"
+		state.notBefore = now + Config.Pacing.ReturnSeconds
+	end
 	return true
 end
 
 function Gate.character(state: State, ready: boolean, epoch: number)
 	state.epoch = epoch
 	state.characterReady, state.cameraReady = ready, false
+	state.presentationSkipped = false -- new character must negotiate fresh readiness
 	state.lastRequest = -math.huge
 	if state.hitId == 0 then
 		state.phase = "Preparing"
@@ -76,9 +85,9 @@ function Gate.request(state: State, owner: number, epoch: any, hitId: any, kind:
 		reason = "Malformed"
 	elseif not state.characterReady then
 		reason = "CharacterNotReady"
-	elseif state.phase == "Flying" then
+	elseif kind == "Ready" and state.phase == "Flying" and not state.presentationSkipped then
 		reason = "NotResolved"
-	elseif kind == "Skip" and state.phase ~= "Resolved" then
+	elseif kind == "Skip" and (state.presentationSkipped or (state.phase ~= "Resolved" and state.phase ~= "Flying")) then
 		reason = "NotSkippable"
 	elseif kind == "Ready" and now < state.notBefore then
 		reason = "ReturnTooSoon"
@@ -91,10 +100,18 @@ function Gate.request(state: State, owner: number, epoch: any, hitId: any, kind:
 		return false, reason
 	end
 	if kind == "Skip" then
-		state.phase = "Returning"
+		state.presentationSkipped = true
+		if state.phase ~= "Flying" then
+			state.phase = "Returning"
+		end
 		state.notBefore = now + Config.Pacing.ReturnSeconds
 	else
-		state.phase, state.cameraReady = "Ready", true
+		state.cameraReady = true
+		-- Readiness can arrive while the authoritative ball is still flying.
+		-- Remember it, but only the server's resolve hook may release this phase.
+		if state.phase ~= "Flying" then
+			state.phase = "Ready"
+		end
 	end
 	return true, ""
 end

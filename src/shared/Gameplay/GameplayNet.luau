@@ -18,6 +18,7 @@ export type Loop = {
 	pitchReady: boolean,
 	notBefore: number,
 	rejection: string,
+	presentationSkipped: boolean?,
 }
 export type Snapshot = { version: number, stats: Stats.Snapshot, loop: Loop?, rejection: string? }
 return Net

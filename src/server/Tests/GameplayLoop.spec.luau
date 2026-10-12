@@ -70,8 +70,8 @@ return function(t)
 		ok = Gate.request(g, 17, 5, 0, "Ready", 3)
 		Test.assertTrue(ok and Gate.canPitch(g), "initial readiness")
 		Gate.begin(g, 8, 12)
-		ok, reason = Gate.request(g, 17, 5, 8, "Skip", 4)
-		Test.assertTrue(not ok and reason == "NotResolved", "cannot skip flight")
+		ok, reason = Gate.request(g, 17, 5, 8, "Ready", 4)
+		Test.assertTrue(not ok and reason == "NotResolved", "cannot ready an unskipped flight")
 		Test.assertTrue(not Gate.canPitch(g))
 		Gate.resolve(g, 8, 7)
 		ok, reason = Gate.request(g, 17, 5, 7, "Ready", 8)
@@ -206,7 +206,7 @@ return function(t)
 			onResolved = function(_, hit)
 				Gate.resolve(gate, hit.launch.hitId, now)
 				Stats.resolve(stats, hit.launch.hitId, Landing.toPayload(hit.outcome))
-				d:resolve("Test", 1, Landing.toPayload(hit.outcome))
+				d:resolve("Test", hit.launch.pitchId, Landing.toPayload(hit.outcome))
 			end,
 			canFinish = function()
 				return Gate.canPitch(gate)
@@ -219,18 +219,20 @@ return function(t)
 			lane:update(now)
 			assert(lane.pitch, "pitch after readiness")
 			local release = lane.pitch.data.releaseTime
+			local pitchId = lane.pitch.data.id
 			now = release
 			lane:update(now)
 			lane:abortPitch(now, "Contact")
 			local launch = table.clone(template.launch)
 			launch.hitId, launch.launchTime = id, now
+			launch.pitchId = pitchId
 			local flight = BattedBall.buildFlight(template.flight.frame, launch)
 			local hit = { launch = launch, flight = flight, outcome = template.outcome }
-			Gate.begin(gate, id, 1)
+			Gate.begin(gate, id, pitchId)
 			Stats.swing(stats, id, true, true)
 			Stats.contact(stats, id, flight.exitSpeedMph)
 			life:launch(now, hit)
-			d:begin(now, { pitchId = 1, flight = flight, confirmed = true, endTime = hit.outcome.endTime })
+			d:begin(now, { pitchId = pitchId, flight = flight, confirmed = true, endTime = hit.outcome.endTime })
 			local landing = now + hit.outcome.endTime
 			while now < landing + 0.01 do
 				now += 1 / 60
@@ -241,7 +243,7 @@ return function(t)
 			end
 			if id % 2 == 0 then
 				Test.assertTrue(Gate.request(gate, 1, 1, id, "Skip", now), "skip alternate results")
-				Test.assertTrue(d:skipResult(now, "Test", 1), "approved skip")
+				Test.assertTrue(d:skipResult(now, "Test", pitchId), "approved skip")
 			end
 			while not d:isBattingView() do
 				now += 1 / 60

@@ -16,6 +16,7 @@ return {
 	Hud = {
 		StatsKey = "G",
 		SkipKey = "Space",
+		SkipInputPriority = 3002, -- above PlayerModule/default actions; only sink during a hit
 		NumberSmoothSeconds = 0.16,
 		NoticeSeconds = 2.2,
 		BaselineNoticeSeconds = 1.4,

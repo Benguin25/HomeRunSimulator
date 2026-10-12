@@ -244,6 +244,9 @@ end
 function BattingCamera.skipResult(laneId: string, pitchId: number): boolean
 	return director:skipResult(serverNow(), laneId, pitchId)
 end
+function BattingCamera.skipPresentation(laneId: string, pitchId: number): boolean
+	return director:skipPresentation(serverNow(), laneId, pitchId)
+end
 
 function BattingCamera.recoverPresentation(laneId: string, pitchId: number)
 	-- Server has already resolved this hit. Only the camera presentation ends;

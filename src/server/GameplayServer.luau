@@ -47,6 +47,7 @@ local function snapshot(player: Player): Net.Snapshot?
 			pitchReady = Gate.canPitch(g),
 			notBefore = g.notBefore,
 			rejection = g.rejection,
+			presentationSkipped = g.presentationSkipped,
 		}
 	end
 	return { version = state.version, stats = Stats.snapshot(state.stats), loop = loop, rejection = state.rejection }

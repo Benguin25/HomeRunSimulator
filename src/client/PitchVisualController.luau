@@ -35,7 +35,8 @@ local visualsFolder: Folder
 local geometryListeners: { Listener<string, LaneGeometry.Geometry> } = {}
 local pitchListeners: { Listener<LaneGeometry.Geometry, Pitch.Flight> } = {}
 local resultListeners: { Listener<ResultInfo> } = {}
-local abortListeners: { Listener<string, number, string> } = {}
+local abortListeners: { Listener<string, number, string, number?> } = {}
+local cutListeners: { Listener<string, number, number?> } = {}
 
 local RENDER_BIND_NAME = "PitchingBallRender"
 
@@ -139,7 +140,7 @@ local function onPitchEvent(kind: string, ...: any)
 			end
 		end
 		for _, listener in abortListeners do
-			task.spawn(listener, laneId, pitchId, reason)
+			task.spawn(listener, laneId, pitchId, reason, atTime)
 		end
 	end
 end
@@ -199,6 +200,9 @@ function PitchVisualController.cutPitch(laneId: string, pitchId: number, atTime:
 	local playback = playbacks[laneId]
 	if playback and playbackPitchIds[laneId] == pitchId then
 		playback:cutAt(atTime)
+		for _, listener in cutListeners do
+			listener(laneId, pitchId, atTime)
+		end
 	end
 end
 
@@ -207,6 +211,9 @@ function PitchVisualController.uncutPitch(laneId: string, pitchId: number)
 	local playback = playbacks[laneId]
 	if playback and playbackPitchIds[laneId] == pitchId then
 		playback:clearCut()
+		for _, listener in cutListeners do
+			listener(laneId, pitchId, nil)
+		end
 	end
 end
 
@@ -225,8 +232,11 @@ function PitchVisualController.onPitchResult(listener: Listener<ResultInfo>)
 	table.insert(resultListeners, listener)
 end
 
-function PitchVisualController.onPitchAborted(listener: Listener<string, number, string>)
+function PitchVisualController.onPitchAborted(listener: Listener<string, number, string, number?>)
 	table.insert(abortListeners, listener)
+end
+function PitchVisualController.onPitchCut(listener: Listener<string, number, number?>)
+	table.insert(cutListeners, listener)
 end
 
 return PitchVisualController

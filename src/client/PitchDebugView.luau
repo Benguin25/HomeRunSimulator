@@ -22,6 +22,7 @@ local PitchPhysics = require(Pitching.PitchPhysics)
 local Shared = Pitching.Parent
 local DebugToggle = require(Shared.Presentation.DebugToggle)
 local GameplayConfig = require(Shared.Gameplay.GameplayConfig)
+local PreviewConfig = require(Shared.Presentation.PitchPreviewConfig)
 
 local PitchVisualController = require(script.Parent.PitchVisualController)
 
@@ -249,6 +250,7 @@ function PitchDebugView.start()
 	local toggleKey: Enum.KeyCode? = if ok then key else nil
 	if toggleKey == nil or toggleKey == Enum.KeyCode.None
 		or cfg.ToggleKey == GameplayConfig.Hud.StatsKey or cfg.ToggleKey == GameplayConfig.Hud.SkipKey
+		or cfg.ToggleKey == PreviewConfig.ToggleKey
 		or toggleKey == Enum.KeyCode.Escape then
 		warn("[Debug] Invalid or conflicting debug toggle key; debug UI disabled.")
 		return

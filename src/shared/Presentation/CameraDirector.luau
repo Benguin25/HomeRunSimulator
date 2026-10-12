@@ -82,6 +82,8 @@ export type CameraDirector = typeof(setmetatable(
 		transitions: number,
 		lastEvent: string,
 		debug: Debug,
+		skippedLane: string?,
+		skippedPitch: number?,
 	},
 	CameraDirector
 ))
@@ -169,6 +171,12 @@ function CameraDirector.begin(self: CameraDirector, now: number, input: HitInput
 	if self.laneId == nil or laneId ~= self.laneId then
 		return false
 	end
+	if self:wasSkipped(laneId, input.pitchId) then
+		-- A late confirmation/corrected prediction cannot reopen skipped framing.
+		-- BattedBallController still reconciles and renders the authoritative ball.
+		return true
+	end
+	self.skippedLane, self.skippedPitch = nil, nil
 	local current = self.hit
 	if current and matches(current, laneId, input.pitchId) and self.state ~= "Returning" then
 		local changed = not BattedBall.sameLaunch(current.flight.launch, input.flight.launch)
@@ -227,14 +235,31 @@ local function startReturn(self: CameraDirector, at: number, event: string)
 	setState(self, "Returning", at, event)
 end
 
+function CameraDirector.wasSkipped(self: CameraDirector, laneId: string, pitchId: number): boolean
+	return self.skippedLane == laneId and self.skippedPitch == pitchId
+end
+function CameraDirector.canSkipPresentation(self: CameraDirector, now: number): boolean
+	local hit = self.hit
+	return hit ~= nil and self.state ~= "Returning" and now >= hit.flight.launch.launchTime
+		and not self:wasSkipped(hit.laneId, hit.pitchId)
+end
+-- Local presentation intent also works for predictions. No flight, outcome or
+-- readiness is changed here; the server gates actual completion separately.
+function CameraDirector.skipPresentation(self: CameraDirector, now: number, laneId: string, pitchId: number): boolean
+	local hit = self.hit
+	if not hit or not matches(hit, laneId, pitchId) or not self:canSkipPresentation(now) then return false end
+	self.skippedLane, self.skippedPitch = laneId, pitchId
+	startReturn(self, now, "flight/result presentation skipped")
+	return true
+end
+
 -- Presentation-only skip. Requires a confirmed result; never changes a flight
 -- or outcome. Duplicate approvals during a return do not restart its blend.
 function CameraDirector.skipResult(self: CameraDirector, now: number, laneId: string, pitchId: number): boolean
 	local hit = self.hit
 	if not hit or not matches(hit, laneId, pitchId) or not hit.confirmed or hit.outcome == nil
 		or self.state ~= "Landing" then return false end
-	startReturn(self, now, "result skipped")
-	return true
+	return self:skipPresentation(now, laneId, pitchId)
 end
 
 -- Drops the hit (prediction rejected, hit cancelled). `laneId` nil = whatever
@@ -260,6 +285,7 @@ function CameraDirector.reset(self: CameraDirector, reason: string)
 	self.fromPose = nil
 	self.landedAt = nil
 	self.impulseStart = -math.huge
+	self.skippedLane, self.skippedPitch = nil, nil
 	setState(self, "Batting", 0, `reset ({reason})`)
 end
 
