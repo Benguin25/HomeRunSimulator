@@ -43,10 +43,12 @@ local ImpactModel = {}
 export type Config = {
 	Impact: typeof(BattedBallConfig.Impact),
 	Power: typeof(BattedBallConfig.Power),
+	ArcadeContact: typeof(BattedBallConfig.ArcadeContact)?,
 }
 
 export type Input = {
 	normal: Vector3, -- unit, bat axis -> ball center
+	up: Vector3?, -- swing-plane up; omitted for raw/analytic physical impact tests
 	ballVelocity: Vector3, -- m/s
 	ballSpin: Vector3, -- rad/s (incoming pitch spin)
 	batVelocity: Vector3, -- m/s, bat surface at the contact point (before power scaling)
@@ -99,6 +101,26 @@ function ImpactModel.collisionEfficiency(restitution: number, inverseMass: numbe
 	return (restitution - r) / (1 + r)
 end
 
+-- Virtual impact surface: preserve in-plane direction, soften vertical tilt.
+-- The actual swept contact/time/position and measured quality are untouched.
+-- f(u)=k*u+(1-k)*sign(u)*((max(|u|-s,0)/(1-s))^3).
+-- Monotonic for 0<k<=1, C2 at the shoulder, odd, with f(0)=0/f(±1)=±1.
+function ImpactModel.contactNormal(normal: Vector3, up: Vector3, config: typeof(BattedBallConfig.ArcadeContact)): Vector3
+	if not config.Enabled or config.CenterSlope == 1 then
+		return normal
+	end
+	local u = math.clamp(normal:Dot(up), -1, 1)
+	local horizontal = normal - up * u
+	if horizontal.Magnitude < 1e-6 then
+		return normal
+	end
+	local k = math.clamp(config.CenterSlope, 0.01, 1)
+	local s = math.clamp(config.ShoulderStart, 0, 0.99)
+	local shoulder = math.max(0, (math.abs(u) - s) / (1 - s))
+	local mapped = k * u + (1 - k) * math.sign(u) * shoulder ^ 3
+	return horizontal.Unit * math.sqrt(math.max(0, 1 - mapped * mapped)) + up * mapped
+end
+
 function ImpactModel.resolve(input: Input, config: Config?): Result
 	local cfg = config or BattedBallConfig
 	local impact, power = cfg.Impact, cfg.Power
@@ -107,6 +129,12 @@ function ImpactModel.resolve(input: Input, config: Config?): Result
 	local ballInertia = impact.BallInertiaFactor * m * radius * radius
 
 	local n = input.normal
+	-- Check real approach first: the adjustment must not turn a separating
+	-- contact into an impact. Bad/degenerate normals retain the existing guard.
+	if input.up and cfg.ArcadeContact and finite(n) and n.Magnitude >= 0.5
+		and -(input.ballVelocity - input.batVelocity * power.BatSpeedMultiplier):Dot(n) > impact.MinApproachSpeedMps then
+		n = ImpactModel.contactNormal(n, input.up, cfg.ArcadeContact)
+	end
 	local v = input.ballVelocity
 	local w = input.ballSpin
 	local batVelocity = input.batVelocity * power.BatSpeedMultiplier

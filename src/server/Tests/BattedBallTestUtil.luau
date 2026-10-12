@@ -202,18 +202,20 @@ function BattedBallTestUtil.impactConfig(power: { [string]: any }?, impact: { [s
 	for key, value in (impact or {}) :: { [string]: any } do
 		i[key] = value
 	end
-	return { Impact = i, Power = p }
+	return { Impact = i, Power = p, ArcadeContact = table.clone(BattedBallConfig.ArcadeContact) }
 end
 
 -- Neutral power (BatSpeedMultiplier = 1 etc.) for analytic impact tests.
 function BattedBallTestUtil.physicalConfig(impact: { [string]: any }?): ImpactModel.Config
-	return BattedBallTestUtil.impactConfig({
+	local config = BattedBallTestUtil.impactConfig({
 		BatSpeedMultiplier = 1,
 		RestitutionScale = 1,
 		SpinEffectiveness = 1,
 		ArcadePowerMultiplier = 1,
 		MaxLaunchEnergyJoules = math.huge,
 	}, impact)
+	config.ArcadeContact = nil
+	return config
 end
 
 -- Real pitch on a lane.

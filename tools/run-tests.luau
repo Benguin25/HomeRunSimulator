@@ -109,13 +109,14 @@ local function requireNode(node)
 	assert(file, `require: {rawget(node, "__name")} is not a ModuleScript`)
 	assert(not loading[node], `require: cyclic dependency at {file}`)
 	loading[node] = true
+	-- selene: allow(global_usage)
 	local env = setmetatable({
 		script = node,
 		require = requireNode,
 		game = game,
 		Vector3 = roblox.Vector3,
 		CFrame = roblox.CFrame,
-	}, { __index = _G })
+	}, { __index = _G }) -- Required to inherit the sandboxed Lune builtins.
 	local chunk = luau.load(fs.readFile(file), { debugName = file, environment = env })
 	local result = chunk()
 	loading[node] = nil
@@ -123,6 +124,24 @@ local function requireNode(node)
 	return result
 end
 
-local tests = requireNode(rawget(rawget(serverScriptService, "__children").Server, "__children").Tests)
+local testNode = rawget(rawget(serverScriptService, "__children").Server, "__children").Tests
+if process.args[1] == "--balance" then
+	local analysis = requireNode(testNode.BalanceAnalysis)
+	local report = analysis.run()
+	local serde = require("@lune/serde")
+	local json = serde.encode("json", report, true)
+	if process.args[2] then
+		fs.writeFile(process.args[2], json .. "\n")
+	end
+	print(json)
+	process.exit(0)
+end
+if process.args[1] == "--spec" then
+	local name = assert(process.args[2], "--spec requires a module name, e.g. ArcadeBalance.spec")
+	local runner = requireNode(testNode.TestRunner)
+	local summary = runner.run({ [name] = requireNode(testNode:WaitForChild(name)) }, false)
+	process.exit(if summary.failed == 0 then 0 else 1)
+end
+local tests = requireNode(testNode)
 local summary = tests.run(false)
 process.exit(if summary.failed == 0 then 0 else 1)

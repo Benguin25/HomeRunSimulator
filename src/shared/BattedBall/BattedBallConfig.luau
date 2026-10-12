@@ -43,13 +43,24 @@ BattedBallConfig.Impact = {
 	MinApproachSpeedMps = 0.01,
 }
 
+-- Stage 5A arcade balance. These affect the shared impact calculation only;
+-- reticle mapping, visible swing, capsule sweep and timing remain unchanged.
+-- Compress moderate vertical normal components; recover the original normal
+-- at the contact edge so badly topped/undercut hits remain poor. The shoulder
+-- joins with continuous first/second derivatives; no quality labels are read.
+BattedBallConfig.ArcadeContact = {
+	Enabled = true,
+	CenterSlope = 0.65, -- 1 = original sensitivity; lower = flatter impact surface
+	ShoulderStart = 0.45, -- |normal dot swing-plane up| where edge recovery begins
+}
+
 -- Power knobs for future progression. Defaults are the beginner tier.
 BattedBallConfig.Power = {
 	-- gameplay: the readable Phase 2 swing moves the sweet spot at ~47 mph
 	-- (youth-level). The impact uses this multiple of that bat velocity, i.e.
-	-- ~56 mph, a high-school-level swing. The visible swing and its collision
+	-- ~79 mph at Stage 5A beginner power. The visible swing and its collision
 	-- timing are unchanged. Realistic for the drawn swing = 1.0.
-	BatSpeedMultiplier = 1.2,
+	BatSpeedMultiplier = 1.68,
 	-- Multiplies the position-dependent restitution (clamped to 1). 1 = wood.
 	RestitutionScale = 1.0,
 	-- Multiplies the outgoing spin vector (Magnus effectiveness). 1 = physical.
@@ -61,6 +72,16 @@ BattedBallConfig.Power = {
 	-- 0.5 * 0.145 kg * (130 mph)^2 ~ 245 J. Raise together with the power knobs.
 	MaxLaunchEnergyJoules = 250,
 }
+
+-- Original Stage 3A/4 tuning, kept for deterministic A/B comparisons.
+-- Pass this to BattedBall.computeLaunch/ImpactModel.resolve; to playtest the
+-- original globally, disable ArcadeContact and set Power.BatSpeedMultiplier=1.2.
+BattedBallConfig.OriginalBalance = {
+	Impact = BattedBallConfig.Impact,
+	Power = table.clone(BattedBallConfig.Power),
+	ArcadeContact = { Enabled = false, CenterSlope = 1, ShoulderStart = 0.60 },
+}
+BattedBallConfig.OriginalBalance.Power.BatSpeedMultiplier = 1.2
 
 -- Flight model (FlightPhysics). Gravity + quadratic drag + Magnus lift.
 BattedBallConfig.Flight = {

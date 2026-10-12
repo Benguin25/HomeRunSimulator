@@ -55,7 +55,7 @@ return function(t)
 			for seed = 1, 6 do
 				local pitch = BBTU.pitch(geometry, seed * 13)
 				local flight, contact, impact, frame = BBTU.hit(geometry, pitch, 0, 0, 0)
-				TestUtil.assertTrue(flight.exitSpeedMph > 65 and flight.exitSpeedMph < 95, string.format("%s seed %d: EV %.1f mph", laneName, seed, flight.exitSpeedMph))
+				TestUtil.assertTrue(flight.exitSpeedMph > 95 and flight.exitSpeedMph < 115, string.format("%s seed %d: EV %.1f mph", laneName, seed, flight.exitSpeedMph))
 				TestUtil.assertTrue(flight.launchAngleDegrees > -6 and flight.launchAngleDegrees < 15, string.format("%s: launch %.1f", laneName, flight.launchAngleDegrees))
 				TestUtil.assertTrue(math.abs(flight.sprayAngleDegrees) < 15, string.format("%s: spray %.1f", laneName, flight.sprayAngleDegrees))
 				TestUtil.assertEqual(BattedBall.describeContact(frame, contact, impact), "Squared", `{laneName} seed {seed}: contact type`)
@@ -77,11 +77,11 @@ return function(t)
 			TestUtil.assertTrue(topped.backspinRpm < 0, string.format("%s: topped should have topspin (%.0f rpm)", laneName, topped.backspinRpm))
 			TestUtil.assertTrue(under.apexHeightMeters > center.apexHeightMeters + 5, `{laneName}: fly ball apex`)
 			TestUtil.assertTrue(projected(under) > projected(center) and projected(center) > projected(topped), `{laneName}: carry ordering`)
-			local deepUnder, c1, i1, frame = BBTU.hit(geometry, pitch, 0, -5 * CM, 0)
+			local deepUnder, c1, i1, frame = BBTU.hit(geometry, pitch, 0, -8 * CM, 0)
 			TestUtil.assertEqual(BattedBall.describeContact(frame, c1, i1), "Under", `{laneName}: deep undercut type`)
 			local _, c2, i2 = BBTU.hit(geometry, pitch, 0, 3 * CM, 0)
 			TestUtil.assertEqual(BattedBall.describeContact(frame, c2, i2), "Topped", `{laneName}: topped type`)
-			TestUtil.assertTrue(deepUnder.launchAngleDegrees > 40, `{laneName}: deep undercut is a pop-up`)
+			TestUtil.assertTrue(deepUnder.launchAngleDegrees > 50, `{laneName}: deep undercut is a pop-up`)
 		end
 	end)
 
@@ -156,13 +156,13 @@ return function(t)
 		local perfect = BBTU.hit(geometry, pitch, 0, 0, 0)
 		-- Ball just under the bottom edge of the barrel: a glancing foul tip / pop-up.
 		local glancing, c, i, frame = BBTU.hit(geometry, pitch, 0, 8.5 * CM, 0)
-		TestUtil.assertTrue(glancing.exitSpeedMph < 0.6 * perfect.exitSpeedMph, string.format("glancing EV %.1f mph", glancing.exitSpeedMph))
+		TestUtil.assertTrue(glancing.exitSpeedMph < 0.7 * perfect.exitSpeedMph, string.format("glancing EV %.1f mph", glancing.exitSpeedMph))
 		local kind = BattedBall.describeContact(frame, c, i)
 		TestUtil.assertTrue(kind == "Glancing" or kind == "Weak" or kind == "Topped", `glancing type {kind}`)
 		-- Jammed on the handle.
 		local across = -SwingModel.batterSideSign()
 		local jammed = BBTU.hit(geometry, pitch, across * 0.32, 0, 0.01)
-		TestUtil.assertTrue(jammed.exitSpeedMph < 45, string.format("jammed EV %.1f mph", jammed.exitSpeedMph))
+		TestUtil.assertTrue(jammed.exitSpeedMph < 60, string.format("jammed EV %.1f mph", jammed.exitSpeedMph))
 		for _, flight in { glancing, jammed } do
 			TestUtil.assertTrue(projected(flight) < 45, "weak contact should not carry far")
 			TestUtil.assertTrue(flight.trajectory.endReason == "Floor", "weak flights end on the floor")
@@ -170,10 +170,10 @@ return function(t)
 		end
 	end)
 
-	t.test("beginner power is believable: solid fly balls, but no routine home runs", function()
+	t.test("beginner power reaches 350–400+ ft while original tuning remains recoverable", function()
 		-- Gameplay acceptance for the configured beginner tier (Power.BatSpeedMultiplier),
-		-- not a physical constant: the best contacts should reach the outfield
-		-- (> 200 ft) without clearing a 330 ft fence.
+		-- not a physical constant: the best elevated contacts can reach 350–400+ ft; this is a benchmark,
+		-- not an assigned distance or a guarantee for typical swings.
 		local geometry = TestUtil.geometries().straight
 		local best = 0
 		for seed = 1, 6 do
@@ -191,7 +191,7 @@ return function(t)
 			end
 		end
 		local feet = best / Units.METERS_PER_FOOT
-		TestUtil.assertTrue(feet > 200 and feet < 330, string.format("best beginner carry %.0f ft", feet))
+		TestUtil.assertTrue(feet > 350 and feet < 430, string.format("best beginner carry %.0f ft", feet))
 	end)
 
 	t.test("simulator-scale power uses the same physics, scaled up", function()

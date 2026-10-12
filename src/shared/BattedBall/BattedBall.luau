@@ -94,8 +94,13 @@ function BattedBall.computeLaunch(
 	impactConfig: ImpactModel.Config?
 ): (LaunchData, ImpactModel.Result)
 	local s = frame.metersPerStud
+	local surfaceUp = contact.batDirection:Cross(contact.swingDirection).Unit
+	if surfaceUp:Dot(frame.up) < 0 then
+		surfaceUp = -surfaceUp
+	end
 	local impact = ImpactModel.resolve({
 		normal = contact.impactNormal,
+		up = surfaceUp,
 		ballVelocity = contact.ballVelocity * s,
 		ballSpin = contact.ballSpin,
 		batVelocity = contact.batVelocity * s,
