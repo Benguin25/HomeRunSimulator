@@ -261,31 +261,6 @@ return function(t)
 		TestUtil.assertTrue((select(3, ArmIK.forward(torso, rig, degenerate)) - grip).Magnitude < 2e-3, "degenerate hint broke the solve")
 	end)
 
-	t.test("the waist turns with the swing: zero at rest, monotonic, capped, never snapping", function()
-		local rest = math.rad(BattingConfig.Swing.RestAngleDegrees)
-		local sign = -SwingModel.batterSideSign()
-		TestUtil.assertNear(BatStance.torsoYaw(rest), 0, 1e-9, "yaw at the resting angle")
-		local previous = -math.huge
-		for degrees = -100, 150, 5 do
-			local yaw = BatStance.torsoYaw(math.rad(degrees)) * sign
-			TestUtil.assertTrue(yaw >= previous - 1e-9, `yaw not monotonic at {degrees} deg`)
-			TestUtil.assertTrue(math.abs(yaw) <= math.rad(BattingConfig.Stance.MaxTorsoYawDegrees) + 1e-9, "yaw above the cap")
-			previous = yaw
-		end
-		TestUtil.assertTrue(BatStance.torsoYaw(math.rad(60)) * sign > math.rad(20), "contact should be visibly turned in")
-		-- Continuous through the whole swing (the visual angle never jumps).
-		local geometry = TestUtil.geometries().straight
-		local swing = SwingModel.new(geometry, 0, units.toStuds(0.8), EPOCH)
-		local ready = BatStance.readyPose(geometry, anchorFor(geometry), 0, units.toStuds(0.8))
-		local last = BatStance.torsoYaw(ready.angle)
-		for i = 0, 600 do
-			local time = EPOCH + (swing.timeline.total + 0.02) * i / 600
-			local yaw = BatStance.torsoYaw(BatStance.visualPoseAt(swing, time, ready, ready).angle)
-			TestUtil.assertTrue(math.abs(yaw - last) < math.rad(4), `waist snaps by {math.deg(math.abs(yaw - last))} deg`)
-			last = yaw
-		end
-	end)
-
 	t.test("body fit puts the shoulders within arm's reach of the swing pivot", function()
 		local geometry = TestUtil.geometries().rotated
 		local home = geometry.batterCFrame.Position + geometry.up * 4.4 -- shoulder midpoint, studs

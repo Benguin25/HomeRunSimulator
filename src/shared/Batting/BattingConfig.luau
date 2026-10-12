@@ -105,27 +105,41 @@ BattingConfig.Stance = {
 	PreloadFraction = 0.35,
 	ReadyFollowSeconds = 0.05, -- smoothing of the resting bat as the mouse moves
 	WindupEasePower = 2, -- >1 = accelerates into the swing
-	-- Hands anchor relative to the shoulders, in units of arm length (R15 rig).
+	-- Hands anchor relative to the shoulders, in units of arm length (R15 or R6).
 	AnchorDownFraction = 0.3,
 	AnchorForwardFraction = 0.4, -- toward the plate (the way the chest faces)
 	AnchorRearFraction = 0.25, -- toward the catcher (rear shoulder side)
-	-- Used when the character has no R15 rig yet (meters from the batter marker).
+	-- Used while no character rig is bound (meters from the batter marker).
 	FallbackHeightMeters = 0.85,
 	FallbackForwardMeters = 0.25,
 	FallbackRearMeters = 0.12,
 	-- Where the hands grip, measured from the knob along the handle.
 	GripBottomMeters = 0.04,
 	GripTopMeters = 0.17,
-	-- Procedural arms: two-bone IK so both hands follow the bat (R15 only).
+	-- Procedural arms so both hands follow the bat (R15: two-bone IK, R6: rigid arms aimed at the grips).
 	ArmIK = true,
 	ElbowOutward = 0.6, -- elbow hint: down, plus this much away from the chest
 	-- Silence the default character animations while batting. Roblox's
 	-- Animator rewrites every Motor6D.Transform each frame, which would undo
 	-- the procedural pose.
 	SuppressAnimations = true,
-	-- Waist rotation follows the bat's swing angle (0 at the resting angle).
-	TorsoYawGain = 0.3,
-	MaxTorsoYawDegrees = 55,
+	-- AnimationConstraint joints (Avatar Joint Upgrade) are force-limited by
+	-- default, so a written Transform is only a target and the limbs lag the
+	-- bat. While batting, the bound joints are made kinematic (they follow the
+	-- Transform exactly) on this client only, and restored afterwards.
+	KinematicJointsWhileBatting = true,
+	-- Torso turn: the chest turns to face the hands as they circle the body
+	-- (the swing is a rotation about the body axis), so the short Roblox arms
+	-- can stay on the handle. Degrees are measured from the stance (chest
+	-- facing the plate); "open" turns toward the pitcher.
+	TorsoFollowHands = 0.9, -- fraction of the hands' angle around the body
+	MaxTorsoOpenDegrees = 110,
+	MaxTorsoCloseDegrees = 20, -- the stance hands sit by the rear shoulder: only a mild load
+	HipTurnFraction = 0.4, -- R15: share of the turn taken by the hips (the waist takes the rest)
+	-- Lean: the upper body tips toward the grips (about the waist for R15,
+	-- about the hips for R6) when the arms would otherwise fall short.
+	MaxLeanDegrees = 30,
+	LeanReachFraction = 0.92, -- lean until each grip is this fraction of the arm length away
 	-- Body fit: the swing is a rotation about a pivot on the batter's body
 	-- axis, so the visible body is moved (client-side only) to put its shoulders
 	-- over that pivot, and crouches when the pivot is far below the shoulders.
@@ -136,6 +150,30 @@ BattingConfig.Stance = {
 	BodyReachMargin = 0.92, -- fraction of arm length the grips may use
 	BodyFollowSeconds = 0.09, -- smoothing of the body position
 	Legs = true, -- bend the legs with feet planted while crouching
+	-- Wrists (R15): curl each hand around the handle (0 = hand straight along
+	-- the forearm, 1 = hand perpendicular to the bat). The hand center still
+	-- lands exactly on its grip point.
+	WristWrap = 0.8,
+	MaxWristBendDegrees = 70,
+	-- R6 rigs have no waist, elbows or wrists. The whole torso turns and leans
+	-- about the hips through RootJoint, each rigid arm is pointed at its grip
+	-- from the shoulder, and the rigid legs splay into a batting stance that
+	-- keeps the feet on the ground (a crouch widens the stance).
+	-- No waist: the hips (and so the feet) turn with the chest. Lower values
+	-- keep the feet calmer but let the rigid arms leave the bat in the
+	-- follow-through.
+	R6MaxTorsoOpenDegrees = 110,
+	R6MaxLeanDegrees = 45, -- rigid arms can't bend, so R6 may lean further
+	R6MaxSideLeanDegrees = 25, -- sideways part of the lean (it lifts one hip and slides the feet)
+	R6AnchorDownFraction = 0.6, -- hands rest lower than R15's, at a straight arm's reach
+	R6HandDepth = 0.9, -- hand point down the arm part, as a fraction of its half-height
+	-- Grip error is measured to the hand end of the rigid arm: this fraction
+	-- of the shoulder-to-hand line (the handle may cross the forearm when the
+	-- grip is closer than the arm is long).
+	R6HandRegion = 0.35,
+	R6MaxCrouchMeters = 0.2,
+	-- Binding is retried this often while the character is still assembling.
+	BindRetrySeconds = 0.4,
 }
 
 -- Collision search settings (see BatCollision).

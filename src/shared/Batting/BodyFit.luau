@@ -20,13 +20,15 @@ local UP = Vector3.new(0, 1, 0)
 -- pivot       : the swing pivot (SwingModel.Swing.pivot)
 -- armLength   : shoulder to hand center, fully extended (studs)
 -- gripRadius  : farthest grip from the pivot (studs)
+-- maxCrouch   : crouch limit in studs (default Stance.BodyMaxCrouchMeters)
 -- Returns the world-space offset to apply to the whole body.
 function BodyFit.target(
 	geometry: LaneGeometry.Geometry,
 	shoulderMid: Vector3,
 	pivot: Vector3,
 	armLength: number,
-	gripRadius: number
+	gripRadius: number,
+	maxCrouch: number?
 ): Vector3
 	local cfg = BattingConfig.Stance
 	if not cfg.BodyFit then
@@ -54,7 +56,7 @@ function BodyFit.target(
 	local usable = armLength * cfg.BodyReachMargin
 	local allowedDrop = math.sqrt(math.max(usable * usable - horizontalReach * horizontalReach, 0))
 	local drop = shoulderMid.Y - pivot.Y
-	local crouch = math.clamp(drop - allowedDrop, 0, units.toStuds(cfg.BodyMaxCrouchMeters))
+	local crouch = math.clamp(drop - allowedDrop, 0, maxCrouch or units.toStuds(cfg.BodyMaxCrouchMeters))
 	return shift - UP * crouch
 end
 

@@ -12,7 +12,7 @@
 --   Windup        : carried from wherever it was into the first collision pose
 --   Active        : EXACTLY the collision pose
 --   FollowThrough : the swing continuing about the same pivot (SwingModel.poseAt)
---   Recovery      : carried back to the hands
+--   Recovery      : unwound back around the front of the body into the hands
 --
 -- Every hand-off is continuous, so the bat never snaps.
 
@@ -110,22 +110,30 @@ function BatStance.visualPoseAt(
 	elseif phase == "FollowThrough" then
 		return SwingModel.poseAt(swing, t)
 	end
-	local u = math.clamp((t - phaseStart) / (phaseEnd - phaseStart), 0, 1)
-	-- poseAt at the phase boundary is the follow-through's final pose.
-	return BatStance.blend(SwingModel.poseAt(swing, phaseStart), readyPose, smoothstep(u), length)
+	-- Recovery: unwind back around the FRONT of the body (the way the swing
+	-- came) while blending into the hands' resting pose. A straight blend
+	-- from the follow-through would cut the bat through the batter's body.
+	local s = smoothstep(math.clamp((t - phaseStart) / (phaseEnd - phaseStart), 0, 1))
+	local angle = swing.followEndAngle + (swing.startAngle - swing.followEndAngle) * s
+	local raise = swing.followRaise + (swing.restRaise - swing.followRaise) * s
+	return BatStance.blend(BatStance.poseAtAngle(swing, angle, raise), readyPose, s, length)
 end
 
--- Waist rotation (radians about world up) for a bat angle: follows the swing,
--- 0 at the resting angle, capped. Positive turns the chest toward the pitcher
--- for either batting side.
-function BatStance.torsoYaw(batAngle: number): number
-	local cfg = BattingConfig.Stance
-	local rest = math.rad(BattingConfig.Swing.RestAngleDegrees)
-	local yaw = cfg.TorsoYawGain * (batAngle - rest)
-	local limit = math.rad(cfg.MaxTorsoYawDegrees)
-	-- Rotation about the swing axis; the axis points up for a right-handed
-	-- batter and down for a left-handed one.
-	return math.clamp(yaw, -limit, limit) * -SwingModel.batterSideSign()
+-- Non-collidable bat pose about the swing pivot at a swing-plane angle and a
+-- raise out of the plane (same construction as SwingModel.poseAt). At the
+-- follow-through's end angle and raise it equals the follow-through's last pose.
+function BatStance.poseAtAngle(swing: SwingModel.Swing, angle: number, raise: number): SwingModel.Pose
+	local flat = SwingModel.directionAt(swing, angle)
+	local direction = if raise == 0 then flat else (flat * math.cos(raise) + swing.axis * math.sin(raise)).Unit
+	local knob = swing.pivot + flat * swing.dims.pivotRadius
+	return {
+		knob = knob,
+		tip = knob + direction * swing.dims.length,
+		direction = direction,
+		planeNormal = if raise == 0 then swing.axis else direction:Cross(swing.axis:Cross(direction)).Unit,
+		angle = angle,
+		collidable = false,
+	}
 end
 
 -- World points where the two hands grip the handle for a bat pose.

@@ -190,7 +190,7 @@ local function onRender(dt: number)
 
 	updatePending(now)
 	BattingPresentation.update()
-	BattingDebugView.updateLive(geo, phase, aimX, aimY, aimClamped, CharacterGrip.describe(geo))
+	BattingDebugView.updateLive(geo, phase, aimX, aimY, aimClamped, if BattingDebugView.isEnabled() then CharacterGrip.describe(geo) else nil)
 end
 
 local function trySwing()

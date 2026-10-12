@@ -140,9 +140,9 @@ Widen the windows with `Swing.ActiveSeconds` / angles, `Bat.BarrelRadiusMeters` 
 | Ready | In the batter's hands, raised over the rear shoulder, drifting `Stance.PreloadFraction` of the way toward the aimed swing |
 | Windup | Carried from the on-screen pose into the first collision pose |
 | Follow-through | The swing continuing about the same pivot |
-| Recovery | Carried back to the hands |
+| Recovery | Unwound back around the front of the body into the hands (Phase 2.7) |
 
-- `src/shared/Batting/ArmIK.luau` is a pure two-bone solver over the rig's Motor6D offsets, and `src/client/CharacterGrip.luau` applies it to the local R15 character every frame. The rear arm is the top hand and the front arm is the bottom hand. Targets are `Stance.GripBottomMeters` and `Stance.GripTopMeters` up the handle. A target the arm can't reach clamps to a straight arm pointing at it. R6 or missing rigs skip the arms, and the bat starts from a fallback anchor near the batter marker. Turn the arms off with `Stance.ArmIK = false`.
+- `src/shared/Batting/ArmIK.luau` is a pure two-bone solver over the rig's Motor6D offsets. `src/client/CharacterGrip.luau` applies the character pose to the local character every frame, for R15 and, since Phase 2.7, R6 (see below). The rear arm is the top hand and the front arm is the bottom hand. Targets are `Stance.GripBottomMeters` and `Stance.GripTopMeters` up the handle. A target the arm can't reach clamps to a straight arm pointing at it. While no rig is bound, the bat starts from a fallback anchor near the batter marker. Turn the arms off with `Stance.ArmIK = false`.
 - Collision geometry, timing, windows and quality thresholds are unchanged. The Phase 2 collision tests still pass untouched.
 
 ### Miss reasons
@@ -156,3 +156,141 @@ Widen the windows with `Swing.ActiveSeconds` / angles, `Bat.BarrelRadiusMeters` 
 ### Tests
 - `BatAlignment.spec`: the drawn bat equals the collision pose while Active; the bat never snaps between phases; the bat starts at the hands; the drawn barrel overlaps the drawn ball at contact; frame-rate independence; arm IK reaches its target and clamps out-of-reach ones.
 - `MissClassification.spec`: pure timing and aim cases, the playtest regression (55 ms early with a slightly low aim now reads Early, not Under), and a randomized check that every blamed mistake, once fixed, really connects.
+
+## Phase 2.7: character animation for R6 and R15
+
+### Why the body never moved
+The Phase 2.6 binder only looked for R15 joint names (`Root`, `Waist`, `LeftShoulder`, `LeftElbow`, `LeftWrist`, ...). An R6 avatar has `RootJoint`, `Left Shoulder` / `Right Shoulder` (with a space), `Left Hip` / `Right Hip` and `Neck`, and no waist, elbow or wrist joints. Binding could never succeed on R6, so the overlay showed "waiting for an R15 rig" forever and only the bat moved. The game's avatar type is set in Studio (Game Settings > Avatar), not in this repo, so the code no longer assumes either rig.
+
+### Layout
+
+| Path | Runs on | Purpose |
+| --- | --- | --- |
+| `src/shared/Batting/RigBinding.luau` | both | Detects the rig from `Humanoid.RigType` and the joints (the joints win on a mismatch), finds the Motor6Ds, and gives an exact reason per joint when it can't bind (`LeftElbow: not found`, `Left Shoulder: Part1 not set`, `is a Weld, not a Motor6D`, ...). It also detects stale bindings after a respawn, an avatar reload replacing parts, or death breaking joints. |
+| `src/shared/Batting/CharacterPose.luau` | both | Pure pose solver over joint offsets for both rigs, producing Motor6D Transforms. It follows the same bat pose that `BatStance` draws, so the body follows the authoritative swing. |
+| `src/client/CharacterGrip.luau` | client | Binds the local character, writes the Transforms, re-applies them after the Animator runs, and reports diagnostics. |
+| `src/server/Tests/MockRig.luau` | tests | Instance-shaped R6 and R15 characters with the standard joint offsets. |
+
+### How the body follows the bat
+- **Shared by both rigs**
+  - **Torso turn.** The chest turns to face the hands as they circle the body (`TorsoFollowHands`), at most `MaxTorsoCloseDegrees` closed in the stance and `MaxTorsoOpenDegrees` open in the follow-through.
+  - **Lean.** The upper body leans toward the grips when the arms would fall short.
+  - **Why both are needed.** Roblox arms are short relative to the bat's circle around the swing pivot. With the old fixed 30% waist turn, the hands missed the handle by 20–40 cm during the swing.
+- **R15**
+  - The hips take `HipTurnFraction` of the turn and the waist takes the rest; the waist also leans.
+  - Shoulders and elbows use the two-bone IK. The wrists curl around the handle (`WristWrap`), and the hand center still lands exactly on its grip.
+  - The legs keep the feet planted and level while the body crouches.
+- **R6**
+  - The whole torso turns and leans about the hips through `RootJoint`. There is no waist.
+  - The lean is mostly a forward bow about the hip line; the sideways part is capped at `R6MaxSideLeanDegrees`.
+  - Each rigid arm is pointed at its grip from the shoulder. If a grip is closer than the straight arm is long, that hand slides down the handle toward the knob.
+  - The legs splay into a batting stance that keeps both feet on the ground. A crouch widens the stance, and the body sinks slightly if a sideways lean would lift a foot.
+  - The hands rest lower than R15's (`R6AnchorDownFraction`).
+- **Recovery** now unwinds the bat back around the front of the body. The old straight blend cut the bat through the batter, and the torso flipped as the hands passed behind the back. This is presentation only.
+
+### Update ordering
+The Animator writes `Motor6D.Transform` after the render step and before physics, and parts only move to their Transforms when physics runs.
+- While batting, the default `Animate` script is disabled and Animator tracks are stopped. Both are restored when batting ends or the character changes.
+- The pose is written in the render step and written again in `RunService.PreSimulation`, after the Animator, so it wins even if something keeps animating.
+- Overwrites are counted and logged once to Output.
+
+### Diagnostics
+- **F7 overlay, rig bound:**
+  - the rig kind and `Humanoid.RigType`, and how many joints are driven;
+  - missing optional joints, and any mismatch note;
+  - the animation state (Animate script on or off, playing tracks, suppression);
+  - whether the Transforms were applied this frame;
+  - the distance from the real hand parts to where the Transforms put them ("visible" or "NOT VISIBLE");
+  - Animator overwrites per second;
+  - the hand-to-bat error, torso turn, lean, body shift and crouch.
+- **F7 overlay, rig not bound:** the exact reason, and the retry interval.
+- **Output:**
+  - `[Batting] Character rig bound: R6 (Humanoid.RigType = R6), driving 5 joints: ...`;
+  - each distinct binding failure;
+  - stale-binding rebinds;
+  - a warning if Transforms are overwritten, or if the hands stay more than 3 cm from their solved positions for over a second.
+
+### Measured hand-to-handle error (mock rigs, CLI)
+These numbers cover in-zone aims at heights 0.5–1.05 m, across the whole swing.
+
+| Rig | Error |
+| --- | --- |
+| R15 | Below 0.5 cm through stance, windup and contact; below 5 cm in follow-through and recovery |
+| R6 | Below 6 cm through contact; below 9 cm overall. The error is measured to the hand end of the rigid arm. |
+
+Some cases fall short:
+- **Edge aims.** The 0.3 m low and 1.3 m high-outside edges of the aim region reach about 8–12 cm (R15) and about 20 cm (R6).
+- **R6 feet pivot.** Because R6 has no waist, its hips turn with the chest. The feet stay on the ground but move up to about 0.45 m during contact and 0.65 m in a full follow-through. Lowering `R6MaxTorsoOpenDegrees` or `R6MaxSideLeanDegrees` calms the feet at the cost of hands leaving the bat.
+
+### Tests
+- **`RigBinding.spec`** checks that:
+  - R15 binds as R15 and R6 binds as R6, without expecting elbows or wrists;
+  - a mislabelled `Humanoid.RigType` is resolved by the joints;
+  - missing, unassembled and wrong-class joints are named;
+  - a missing Humanoid or HumanoidRootPart gives a specific reason;
+  - bindings go stale after joints are removed or broken.
+- **`CharacterPose.spec`** checks, for both rigs:
+  - the hands stay on the handle through the whole swing;
+  - forward kinematics of the Transforms match the solve;
+  - the arms move and the chest turns through contact and follow-through;
+  - no joint jumps more than 15° or 4 cm per ~1.4 ms step;
+  - the feet stay on the ground;
+  - left-handed batters are mirrored;
+  - the torso turn is continuous and capped;
+  - `ArmIK = false` leaves the arms alone.
+
+### Playtest in Studio
+1. Press Play and watch Output for `[Batting] Character rig bound: ...`, which names the rig. To test the other rig, change Game Settings > Avatar > Avatar Type and play again.
+2. Press F7. The rig line should say `bound` and the transforms should say `applied` and `visible`, with about 0 Animator overwrites per second.
+3. Move the mouse. The hands, arms and chest should track the aim while the bat rests in the hands.
+4. Swing. Check that:
+   - the chest opens through contact;
+   - the arms stay on the handle;
+   - the follow-through turns the body;
+   - recovery unwinds back to the stance with no snapping.
+5. Reset the character (Esc > Reset). Output should show a stale-binding rebind, then a new bind.
+
+## Phase 2.8: AnimationConstraint rigs (Avatar Joint Upgrade)
+
+### What was wrong
+Roblox's Avatar Joint Upgrade replaces an R15 character's Motor6Ds with `AnimationConstraint`s. Phase 2.7 accepted only Motor6Ds, so it rejected a valid R15 avatar ("R15 rig incomplete ... is a AnimationConstraint, not a Motor6D").
+
+### How AnimationConstraint differs
+| | Motor6D | AnimationConstraint |
+| --- | --- | --- |
+| Connects | `Part0`, `Part1` | `Attachment0`, `Attachment1` (the parts are the attachments' parents) |
+| Offsets | `C0`, `C1` | `Attachment0.CFrame`, `Attachment1.CFrame` |
+| Pose channel | writable `Transform` | writable `Transform` (Roblox: "the internal CFrame that is manipulated when the constraint is being animated") |
+| Placement | `Part1 = Part0 * C0 * Transform * C1:Inverse()` | Keeps the attachments "offset by Transform": `Part1 = Part0 * A0.CFrame * Transform * A1.CFrame:Inverse()` |
+| Physics | rigid | Force- and torque-limited unless `IsKinematic = true` ("the connected parts follow the Transform perfectly without participating in physics simulation") |
+
+### What changed
+- **Joint adapter (`RigBinding`).** Binding accepts both joint classes. `RigBinding.frame(joint)` gives one view of both: `part0`, `part1`, `c0` and `c1`. Everything downstream (`CharacterPose.read`, the client's hand-part measurement) uses it, so the pose maths is unchanged and shared.
+- **Failure reasons.** These now cover AnimationConstraints: `Attachment1 not set`, `Attachment0 is not on a BasePart`, `disabled`, and `is a BallSocketConstraint, not a Motor6D or AnimationConstraint`. When several objects share a joint's name (such as ragdoll sockets or values), the first usable joint wins, and a failure explains the joint-class candidate first.
+- **Kinematic joints while batting.** A force-limited constraint only steers toward a written Transform, so the limbs would lag the bat and leave the collision geometry. While batting, the client switches the bound AnimationConstraints to `IsKinematic = true` and restores each one's original value on release. Nothing is replaced, created or destroyed, the appearance is untouched, and the server never sees the change. This is set by `Stance.KinematicJointsWhileBatting`.
+- **Unchanged.** Animation suppression and the PreSimulation re-apply work exactly as in Phase 2.7.
+
+### F7 overlay
+- **`rig:`** the rig kind, `Humanoid.RigType`, the joint implementation (for example `14 AnimationConstraint` or `14 Motor6D`), and how many joints were made kinematic.
+- **`anim:`** the Animate script and Animator track state, whether Transforms are applied this frame, and Animator overwrites.
+- **`motion:`** "VISIBLE" only when the real hand parts are within 3 cm of where the Transforms put them, plus how far the rendered hands actually travelled in the last second. Binding alone is never reported as success.
+- **`grip:`** the hand-to-bat error, torso turn, lean, and body shift.
+
+### Tests
+- **`RigBinding.spec`** checks that:
+  - an AnimationConstraint R15 binds, and the adapter reads the same offsets and parts as the Motor6D rig;
+  - unattached, disabled and wrong-class constraints are named;
+  - a same-named BallSocketConstraint earlier in the tree doesn't win;
+  - a binding goes stale when an attachment is removed.
+- **`CharacterPose.spec`** checks that:
+  - the AnimationConstraint rig gets Transforms identical to the Motor6D rig through whole swings;
+  - the hands-on-handle, forward-kinematics and visible-swing tests pass for it too.
+
+### Needs Studio
+These can't be tested from the CLI:
+- whether a client-side `IsKinematic` switch is honored for your avatar;
+- that the hand parts really follow (check the `motion:` line);
+- that the Animator stays silent;
+- that releasing restores the original joint state.
+
+If `motion:` reads NOT VISIBLE with `14 AnimationConstraint`, the next things to check are network ownership of the limbs and whether the engine accepts the client-side `IsKinematic` change.

@@ -1,6 +1,7 @@
 --!strict
--- Two-bone arm IK for an R15 rig, expressed over Motor6D data so it can be
--- verified without Roblox instances (see ArmIK tests).
+-- Two-bone arm IK for an R15 rig (and one-bone aiming for R6's rigid limbs),
+-- expressed over Motor6D data so it can be verified without Roblox instances
+-- (see the BatAlignment and CharacterPose tests).
 --
 -- A Motor6D places its Part1 at   Part0 * C0 * Transform * C1:Inverse().
 -- For shoulder -> elbow -> wrist only the rotation of each Transform is
@@ -31,9 +32,12 @@ export type Solution = {
 	reachable: boolean,
 }
 
-local function rotationBetween(from: Vector3, to: Vector3): CFrame
+-- Smallest rotation taking unit vector `from` to unit vector `to`, optionally
+-- limited to `maxAngle` radians.
+local function rotationBetween(from: Vector3, to: Vector3, maxAngle: number?): CFrame
 	local axis = from:Cross(to)
 	local dot = math.clamp(from:Dot(to), -1, 1)
+	local limit = maxAngle or math.pi
 	if axis.Magnitude < 1e-6 then
 		if dot > 0 then
 			return CFrame.identity
@@ -43,9 +47,27 @@ local function rotationBetween(from: Vector3, to: Vector3): CFrame
 		if perpendicular.Magnitude < 1e-6 then
 			perpendicular = from:Cross(Vector3.new(1, 0, 0))
 		end
-		return CFrame.fromAxisAngle(perpendicular.Unit, math.pi)
+		return CFrame.fromAxisAngle(perpendicular.Unit, math.min(math.pi, limit))
 	end
-	return CFrame.fromAxisAngle(axis.Unit, math.acos(dot))
+	return CFrame.fromAxisAngle(axis.Unit, math.min(math.acos(dot), limit))
+end
+
+ArmIK.rotationBetween = rotationBetween
+
+-- One-bone "IK" for a rigid limb (R6 arms and legs): the joint Transform that
+-- points the limb's `tip` (a point in the limb part's space, e.g. the hand)
+-- at `target`, with the least rotation away from `base` (the Transform the
+-- limb would otherwise have). `jointFrame` is Part0 * C0. Returns the
+-- Transform and the tip's resulting world position.
+function ArmIK.aimRigid(jointFrame: CFrame, c1: CFrame, tip: Vector3, base: CFrame, target: Vector3): (CFrame, Vector3)
+	local toTip = c1:Inverse() * tip -- joint space, before the Transform
+	local current = base:VectorToWorldSpace(toTip)
+	local wanted = jointFrame:VectorToObjectSpace(target - jointFrame.Position)
+	if wanted.Magnitude < 1e-4 or current.Magnitude < 1e-4 then
+		return base, (jointFrame * base) * toTip
+	end
+	local transform = rotationBetween(current.Unit, wanted.Unit) * base.Rotation
+	return transform, (jointFrame * transform) * toTip
 end
 
 -- Joint-to-joint lengths and the wrist->hand-center distance.
@@ -95,10 +117,10 @@ function ArmIK.solve(torso: CFrame, rig: ArmRig, grip: Vector3, pole: Vector3): 
 	local hand = shoulder + along * distance
 	local wrist = elbow + (hand - elbow).Unit * lower
 
-	local shoulderTransform = rotationBetween(toElbow.Unit, neutralShoulder:VectorToObjectSpace((elbow - shoulder).Unit))
+	local shoulderTransform = rotationBetween(toElbow.Unit, (neutralShoulder:VectorToObjectSpace((elbow - shoulder).Unit)))
 	local upperArm = neutralShoulder * shoulderTransform * rig.shoulderC1:Inverse()
 	local neutralElbow = upperArm * rig.elbowC0
-	local elbowTransform = rotationBetween(toWrist.Unit, neutralElbow:VectorToObjectSpace((wrist - elbow).Unit))
+	local elbowTransform = rotationBetween(toWrist.Unit, (neutralElbow:VectorToObjectSpace((wrist - elbow).Unit)))
 
 	return {
 		shoulder = shoulderTransform,
