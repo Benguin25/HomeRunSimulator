@@ -38,6 +38,8 @@ local BattedBallDebugView = require(script.Parent.BattedBallDebugView)
 local BattingCamera = require(script.Parent.BattingCamera)
 local HitEffects = require(script.Parent.HitEffects)
 local PitchVisualController = require(script.Parent.PitchVisualController)
+local ProgressionController = require(script.Parent.ProgressionController)
+local ProgressionRules = require(Shared.Progression.ProgressionRules)
 
 local BattedBallController = {}
 
@@ -129,12 +131,14 @@ function BattedBallController.predict(laneId: string, pitchId: number, contact: 
 	if not frame then
 		return
 	end
+	local powerLevel, powerVersion = ProgressionController.power()
 	local launch, impact = BattedBall.computeLaunch(frame, contact, {
 		hitId = 0,
 		laneId = laneId,
 		pitchId = pitchId,
 		userId = localPlayer.UserId,
-	})
+	}, ProgressionRules.impactConfig(powerLevel))
+	launch.powerLevel, launch.powerVersion = powerLevel, powerVersion
 	local entry = newEntry(launch, frame, true, nil)
 	entry.impact = impact
 	entry.contactType = BattedBall.describeContact(frame, contact, impact)

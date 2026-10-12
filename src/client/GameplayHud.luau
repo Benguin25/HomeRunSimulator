@@ -16,12 +16,7 @@ local Controller = require(script.Parent.GameplayController)
 local BattingCamera = require(script.Parent.BattingCamera)
 local PitchDebugView = require(script.Parent.PitchDebugView)
 local Hud = {}
-local COLORS = {
-	panel = Color3.fromRGB(14, 18, 28),
-	text = Color3.fromRGB(245, 247, 255),
-	muted = Color3.fromRGB(170, 178, 196),
-	gold = Color3.fromRGB(255, 205, 64),
-}
+local COLORS = require(script.Parent.HudStyle).Colors
 local gui: ScreenGui
 local main: CanvasGroup
 local details: CanvasGroup

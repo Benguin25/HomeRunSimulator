@@ -33,6 +33,7 @@
 local FieldFrame = require(script.Parent.FieldFrame)
 local BattedBall = require(script.Parent.BattedBall)
 local BattedBallConfig = require(script.Parent.BattedBallConfig)
+local ProgressionConfig = require(script.Parent.Parent.Progression.ProgressionConfig)
 
 local LandingDetector = {}
 
@@ -45,6 +46,24 @@ export type CastHit = {
 
 -- Sweeps a sphere of `radius` (studs) from `origin` along `displacement`.
 export type Caster = (origin: Vector3, displacement: Vector3, radius: number) -> CastHit?
+
+-- Keep each engine sphere sweep below its displacement limit. Return the first
+-- hit's distance relative to the original chord, including completed chunks.
+function LandingDetector.boundedCaster(caster: Caster): Caster
+	return function(origin: Vector3, displacement: Vector3, radius: number): CastHit?
+		local length = displacement.Magnitude
+		local chunks = math.max(1, math.ceil(length / ProgressionConfig.Limits.MaxCastStuds))
+		local segment = displacement / chunks
+		for index = 0, chunks - 1 do
+			local hit = caster(origin + segment * index, segment, radius)
+			if hit then
+				return { distance = hit.distance + length * index / chunks,
+					point = hit.point, normal = hit.normal, name = hit.name }
+			end
+		end
+		return nil
+	end
+end
 
 export type SurfaceKind = "Ground" | "Wall" | "Ceiling"
 
@@ -114,6 +133,7 @@ end
 -- First impact along the stored trajectory, or nil. Returns the cast count too.
 function LandingDetector.findFirstImpact(flight: BattedBall.Flight, caster: Caster, options: Options?): (Impact?, number)
 	local opts: Options = options or {}
+	caster = LandingDetector.boundedCaster(caster)
 	local cfg = BattedBallConfig.Collision
 	local traj = flight.trajectory
 	local frame = flight.frame

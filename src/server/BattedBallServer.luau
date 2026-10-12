@@ -32,6 +32,8 @@ local LandingDetector = require(BattedBallFolder.LandingDetector)
 
 local PitchServer = require(script.Parent.PitchServer)
 local GameplayServer = require(script.Parent.GameplayServer)
+local ProgressionServer = require(script.Parent.ProgressionServer)
+local ProgressionRules = require(Shared.Progression.ProgressionRules)
 
 local BattedBallServer = {}
 
@@ -207,13 +209,16 @@ function BattedBallServer.launch(laneId: string, pitchId: number, player: Player
 	end
 	nextHitId += 1
 	local hitId = nextHitId
+	-- Capture current authority at accepted contact, regardless of pitch age.
+	local powerLevel, powerVersion = ProgressionServer.power(player)
 
 	local launch, impact = BattedBall.computeLaunch(lane.frame, contact, {
 		hitId = hitId,
 		laneId = laneId,
 		pitchId = pitchId,
 		userId = player.UserId,
-	})
+	}, ProgressionRules.impactConfig(powerLevel))
+	launch.powerLevel, launch.powerVersion = powerLevel, powerVersion
 	local t0 = os.clock()
 	local flight = BattedBall.buildFlight(lane.frame, launch)
 	local t1 = os.clock()

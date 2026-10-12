@@ -1,0 +1,1416 @@
+{
+  "configuration": {
+    "Balance": {
+      "Attempts": 150,
+      "BaseAttemptSeconds": 3.5,
+      "Levels": [
+        0,
+        1,
+        5,
+        10,
+        20,
+        30,
+        40
+      ],
+      "MilestoneAttemptBudget": 3000,
+      "MilestonesFeet": [
+        400,
+        500,
+        750,
+        1000
+      ],
+      "TypicalSessionSeconds": 600
+    },
+    "Hud": {
+      "CompactWidth": 960,
+      "MaxScale": 1.1,
+      "MinScale": 0.65,
+      "NoticeSeconds": 2
+    },
+    "Limits": {
+      "CameraWatchdogGraceSeconds": 4,
+      "MaxCastStuds": 900,
+      "MaxCoins": 1000000000000,
+      "MaxDistanceMeters": 10000,
+      "MaxExitSpeedMps": 5000,
+      "MaxFlightSeconds": 30,
+      "MaxSequence": 2147483647,
+      "PurchaseGapSeconds": 0.35
+    },
+    "Power": {
+      "BaseCost": 400,
+      "CostGrowth": 1.22,
+      "Growth": 1.12,
+      "MaxLevel": 40
+    },
+    "Reward": {
+      "CoinsPerFoot": 0.45,
+      "ContactCoins": 20,
+      "MaxDistanceMeters": 10000
+    },
+    "SchemaVersion": 1
+  },
+  "elapsedSeconds": 77.94256719999248,
+  "idealBenchmarks": [
+    {
+      "carryFeet": 390.0847970535425,
+      "casts": 90,
+      "endTime": 4.319178613273978,
+      "exitMph": 104.98388375054962,
+      "level": 0,
+      "simMs": 3.1682999979238957,
+      "steps": 713,
+      "sweepMs": 5.402100010542199
+    },
+    {
+      "carryFeet": 452.81694922686916,
+      "casts": 103,
+      "endTime": 4.843062520590381,
+      "exitMph": 117.58195901650912,
+      "level": 1,
+      "simMs": 3.6137000133749098,
+      "steps": 766,
+      "sweepMs": 9.781999979168177
+    },
+    {
+      "carryFeet": 727.1428092040671,
+      "casts": 149,
+      "endTime": 7.1837091317134565,
+      "exitMph": 185.01749359545917,
+      "level": 5,
+      "simMs": 5.325500009348616,
+      "steps": 1009,
+      "sweepMs": 8.389599999645725
+    },
+    {
+      "carryFeet": 1067.613398873517,
+      "casts": 202,
+      "endTime": 9.91990783352963,
+      "exitMph": 326.06401354735806,
+      "level": 10,
+      "simMs": 5.776999983936548,
+      "steps": 1311,
+      "sweepMs": 15.2959999977611
+    },
+    {
+      "carryFeet": 1735.4077256036435,
+      "casts": 286,
+      "endTime": 13.996800645980898,
+      "exitMph": 1012.7053230083578,
+      "level": 20,
+      "simMs": 9.122999996179715,
+      "steps": 1784,
+      "sweepMs": 16.98949999990873
+    },
+    {
+      "carryFeet": 2431.7496054194794,
+      "casts": 344,
+      "endTime": 16.89769444863217,
+      "exitMph": 3145.309098720892,
+      "level": 30,
+      "simMs": 10.026299976743758,
+      "steps": 2128,
+      "sweepMs": 22.80620002420619
+    },
+    {
+      "carryFeet": 3151.990129947901,
+      "casts": 391,
+      "endTime": 19.243113504002814,
+      "exitMph": 9768.852610714366,
+      "level": 40,
+      "simMs": 10.639699990861118,
+      "steps": 2408,
+      "sweepMs": 22.922699979972094
+    }
+  ],
+  "inputs": {
+    "lanes": [
+      "straight",
+      "rotated"
+    ],
+    "offsets": {
+      "Average": [
+        [
+          0.08,
+          -0.015,
+          -0.02
+        ],
+        [
+          -0.08,
+          -0.03,
+          0.02
+        ],
+        [
+          0,
+          -0.045,
+          0
+        ],
+        [
+          0,
+          0.015,
+          0
+        ],
+        [
+          0.15,
+          -0.015,
+          0.045
+        ],
+        [
+          0,
+          -0.025,
+          0.01
+        ]
+      ],
+      "Beginner": [
+        [
+          0.15,
+          0.025,
+          -0.045
+        ],
+        [
+          -0.15,
+          0.015,
+          0.045
+        ],
+        [
+          0,
+          0.035,
+          0.02
+        ],
+        [
+          0.08,
+          -0.015,
+          -0.02
+        ],
+        [
+          0,
+          -0.03,
+          0.02
+        ],
+        [
+          0,
+          0.13,
+          0
+        ]
+      ],
+      "Skilled": [
+        [
+          0,
+          -0.035,
+          0
+        ],
+        [
+          0.04,
+          -0.045,
+          0.01
+        ],
+        [
+          -0.04,
+          -0.055,
+          -0.01
+        ],
+        [
+          0,
+          -0.025,
+          0
+        ],
+        [
+          0,
+          -0.045,
+          0
+        ],
+        [
+          0.08,
+          0,
+          0.02
+        ]
+      ]
+    },
+    "pitchSeeds": [
+      537,
+      574,
+      611
+    ],
+    "sides": [
+      "Right",
+      "Left"
+    ]
+  },
+  "profiles": {
+    "Average": {
+      "after150Attempts": {
+        "coins": 2905,
+        "contacts": 146,
+        "earnedCoins": 44885,
+        "level": 16,
+        "seconds": 1251.5288070990418
+      },
+      "gridAttempts": 72,
+      "gridContacts": 70,
+      "levels": [
+        {
+          "bestFeet": 402.9514400484125,
+          "level": 0,
+          "maxCoins": 201,
+          "meanCoinsPerContact": 109.85714285714286,
+          "meanDistanceFeet": 207.19605242002405,
+          "minCoins": 20,
+          "multiplier": 1,
+          "nextCost": 400
+        },
+        {
+          "bestFeet": 461.08834349396847,
+          "level": 1,
+          "maxCoins": 227,
+          "meanCoinsPerContact": 125.2,
+          "meanDistanceFeet": 241.6532925750636,
+          "minCoins": 20,
+          "multiplier": 1.12,
+          "nextCost": 488
+        },
+        {
+          "bestFeet": 727.4979462754552,
+          "level": 5,
+          "maxCoins": 347,
+          "meanCoinsPerContact": 196.92857142857142,
+          "meanDistanceFeet": 402.882560605567,
+          "minCoins": 0,
+          "multiplier": 1.7623416832000007,
+          "nextCost": 1082
+        },
+        {
+          "bestFeet": 1101.9484547902382,
+          "level": 10,
+          "maxCoins": 515,
+          "meanCoinsPerContact": 303.3285714285714,
+          "meanDistanceFeet": 639.3845691064373,
+          "minCoins": 20,
+          "multiplier": 3.105848208344212,
+          "nextCost": 2922
+        },
+        {
+          "bestFeet": 1837.0125163725138,
+          "level": 20,
+          "maxCoins": 846,
+          "meanCoinsPerContact": 523.2,
+          "meanDistanceFeet": 1128.8567282947977,
+          "minCoins": 20,
+          "multiplier": 9.646293093274952,
+          "nextCost": 21344
+        },
+        {
+          "bestFeet": 2570.132509464302,
+          "level": 30,
+          "maxCoins": 1176,
+          "meanCoinsPerContact": 746.3,
+          "meanDistanceFeet": 1624.910107545718,
+          "minCoins": 20,
+          "multiplier": 29.95992212091116,
+          "nextCost": 155904
+        },
+        {
+          "bestFeet": 3305.8730178839737,
+          "level": 40,
+          "maxCoins": 1507,
+          "meanCoinsPerContact": 970.7142857142857,
+          "meanDistanceFeet": 2123.683440569485,
+          "minCoins": 20,
+          "multiplier": 93.05097044136404
+        }
+      ],
+      "milestones": {
+        "1000": {
+          "attempts": 69,
+          "contacts": 68,
+          "level": 11,
+          "seconds": 512.4240080738402
+        },
+        "400": {
+          "attempts": 7,
+          "contacts": 7,
+          "level": 1,
+          "seconds": 42.33322466799187
+        },
+        "500": {
+          "attempts": 9,
+          "contacts": 9,
+          "level": 2,
+          "seconds": 57.25155097754207
+        },
+        "750": {
+          "attempts": 31,
+          "contacts": 31,
+          "level": 6,
+          "seconds": 204.9872989945066
+        }
+      },
+      "purchases": [
+        {
+          "attempt": 3,
+          "attemptsSincePrevious": 3,
+          "contacts": 3,
+          "contactsSincePrevious": 3,
+          "cost": 400,
+          "level": 1
+        },
+        {
+          "attempt": 7,
+          "attemptsSincePrevious": 4,
+          "contacts": 7,
+          "contactsSincePrevious": 4,
+          "cost": 488,
+          "level": 2
+        },
+        {
+          "attempt": 12,
+          "attemptsSincePrevious": 5,
+          "contacts": 12,
+          "contactsSincePrevious": 5,
+          "cost": 596,
+          "level": 3
+        },
+        {
+          "attempt": 17,
+          "attemptsSincePrevious": 5,
+          "contacts": 17,
+          "contactsSincePrevious": 5,
+          "cost": 727,
+          "level": 4
+        },
+        {
+          "attempt": 21,
+          "attemptsSincePrevious": 4,
+          "contacts": 21,
+          "contactsSincePrevious": 4,
+          "cost": 887,
+          "level": 5
+        },
+        {
+          "attempt": 27,
+          "attemptsSincePrevious": 6,
+          "contacts": 27,
+          "contactsSincePrevious": 6,
+          "cost": 1082,
+          "level": 6
+        },
+        {
+          "attempt": 33,
+          "attemptsSincePrevious": 6,
+          "contacts": 33,
+          "contactsSincePrevious": 6,
+          "cost": 1319,
+          "level": 7
+        },
+        {
+          "attempt": 42,
+          "attemptsSincePrevious": 9,
+          "contacts": 42,
+          "contactsSincePrevious": 9,
+          "cost": 1610,
+          "level": 8
+        },
+        {
+          "attempt": 49,
+          "attemptsSincePrevious": 7,
+          "contacts": 49,
+          "contactsSincePrevious": 7,
+          "cost": 1964,
+          "level": 9
+        },
+        {
+          "attempt": 57,
+          "attemptsSincePrevious": 8,
+          "contacts": 56,
+          "contactsSincePrevious": 7,
+          "cost": 2395,
+          "level": 10
+        },
+        {
+          "attempt": 67,
+          "attemptsSincePrevious": 10,
+          "contacts": 66,
+          "contactsSincePrevious": 10,
+          "cost": 2922,
+          "level": 11
+        },
+        {
+          "attempt": 79,
+          "attemptsSincePrevious": 12,
+          "contacts": 77,
+          "contactsSincePrevious": 11,
+          "cost": 3565,
+          "level": 12
+        },
+        {
+          "attempt": 91,
+          "attemptsSincePrevious": 12,
+          "contacts": 89,
+          "contactsSincePrevious": 12,
+          "cost": 4349,
+          "level": 13
+        },
+        {
+          "attempt": 107,
+          "attemptsSincePrevious": 16,
+          "contacts": 105,
+          "contactsSincePrevious": 16,
+          "cost": 5306,
+          "level": 14
+        },
+        {
+          "attempt": 123,
+          "attemptsSincePrevious": 16,
+          "contacts": 121,
+          "contactsSincePrevious": 16,
+          "cost": 6473,
+          "level": 15
+        },
+        {
+          "attempt": 144,
+          "attemptsSincePrevious": 21,
+          "contacts": 140,
+          "contactsSincePrevious": 19,
+          "cost": 7897,
+          "level": 16
+        },
+        {
+          "attempt": 165,
+          "attemptsSincePrevious": 21,
+          "contacts": 161,
+          "contactsSincePrevious": 21,
+          "cost": 9635,
+          "level": 17
+        },
+        {
+          "attempt": 193,
+          "attemptsSincePrevious": 28,
+          "contacts": 189,
+          "contactsSincePrevious": 28,
+          "cost": 11754,
+          "level": 18
+        },
+        {
+          "attempt": 223,
+          "attemptsSincePrevious": 30,
+          "contacts": 217,
+          "contactsSincePrevious": 28,
+          "cost": 14340,
+          "level": 19
+        },
+        {
+          "attempt": 259,
+          "attemptsSincePrevious": 36,
+          "contacts": 253,
+          "contactsSincePrevious": 36,
+          "cost": 17495,
+          "level": 20
+        },
+        {
+          "attempt": 301,
+          "attemptsSincePrevious": 42,
+          "contacts": 293,
+          "contactsSincePrevious": 40,
+          "cost": 21344,
+          "level": 21
+        },
+        {
+          "attempt": 350,
+          "attemptsSincePrevious": 49,
+          "contacts": 341,
+          "contactsSincePrevious": 48,
+          "cost": 26039,
+          "level": 22
+        },
+        {
+          "attempt": 408,
+          "attemptsSincePrevious": 58,
+          "contacts": 398,
+          "contactsSincePrevious": 57,
+          "cost": 31768,
+          "level": 23
+        },
+        {
+          "attempt": 476,
+          "attemptsSincePrevious": 68,
+          "contacts": 464,
+          "contactsSincePrevious": 66,
+          "cost": 38756,
+          "level": 24
+        },
+        {
+          "attempt": 555,
+          "attemptsSincePrevious": 79,
+          "contacts": 541,
+          "contactsSincePrevious": 77,
+          "cost": 47283,
+          "level": 25
+        },
+        {
+          "attempt": 649,
+          "attemptsSincePrevious": 94,
+          "contacts": 631,
+          "contactsSincePrevious": 90,
+          "cost": 57685,
+          "level": 26
+        },
+        {
+          "attempt": 758,
+          "attemptsSincePrevious": 109,
+          "contacts": 738,
+          "contactsSincePrevious": 107,
+          "cost": 70375,
+          "level": 27
+        },
+        {
+          "attempt": 889,
+          "attemptsSincePrevious": 131,
+          "contacts": 865,
+          "contactsSincePrevious": 127,
+          "cost": 85857,
+          "level": 28
+        },
+        {
+          "attempt": 1044,
+          "attemptsSincePrevious": 155,
+          "contacts": 1016,
+          "contactsSincePrevious": 151,
+          "cost": 104746,
+          "level": 29
+        },
+        {
+          "attempt": 1225,
+          "attemptsSincePrevious": 181,
+          "contacts": 1191,
+          "contactsSincePrevious": 175,
+          "cost": 127790,
+          "level": 30
+        },
+        {
+          "attempt": 1440,
+          "attemptsSincePrevious": 215,
+          "contacts": 1400,
+          "contactsSincePrevious": 209,
+          "cost": 155904,
+          "level": 31
+        },
+        {
+          "attempt": 1694,
+          "attemptsSincePrevious": 254,
+          "contacts": 1648,
+          "contactsSincePrevious": 248,
+          "cost": 190202,
+          "level": 32
+        },
+        {
+          "attempt": 1995,
+          "attemptsSincePrevious": 301,
+          "contacts": 1941,
+          "contactsSincePrevious": 293,
+          "cost": 232047,
+          "level": 33
+        },
+        {
+          "attempt": 2353,
+          "attemptsSincePrevious": 358,
+          "contacts": 2289,
+          "contactsSincePrevious": 348,
+          "cost": 283097,
+          "level": 34
+        },
+        {
+          "attempt": 2779,
+          "attemptsSincePrevious": 426,
+          "contacts": 2703,
+          "contactsSincePrevious": 414,
+          "cost": 345378,
+          "level": 35
+        }
+      ],
+      "tenMinuteSession": {
+        "attempts": 80,
+        "contacts": 78,
+        "earnedCoins": 18709,
+        "level": 12,
+        "seconds": 600.7607186722407
+      }
+    },
+    "Beginner": {
+      "after150Attempts": {
+        "coins": 2956,
+        "contacts": 104,
+        "earnedCoins": 20911,
+        "level": 12,
+        "seconds": 839.6570599856427
+      },
+      "gridAttempts": 72,
+      "gridContacts": 50,
+      "levels": [
+        {
+          "bestFeet": 379.3981999014457,
+          "level": 0,
+          "maxCoins": 190,
+          "meanCoinsPerContact": 84.4,
+          "meanDistanceFeet": 148.10633474483657,
+          "minCoins": 0,
+          "multiplier": 1,
+          "nextCost": 400
+        },
+        {
+          "bestFeet": 443.42797903882126,
+          "level": 1,
+          "maxCoins": 219,
+          "meanCoinsPerContact": 102.48,
+          "meanDistanceFeet": 186.70773652233717,
+          "minCoins": 20,
+          "multiplier": 1.12,
+          "nextCost": 488
+        },
+        {
+          "bestFeet": 727.4979462754552,
+          "level": 5,
+          "maxCoins": 347,
+          "meanCoinsPerContact": 166.56,
+          "meanDistanceFeet": 329.0731329089854,
+          "minCoins": 20,
+          "multiplier": 1.7623416832000007,
+          "nextCost": 1082
+        },
+        {
+          "bestFeet": 1101.9484547902382,
+          "level": 10,
+          "maxCoins": 515,
+          "meanCoinsPerContact": 230.46,
+          "meanDistanceFeet": 543.381159642371,
+          "minCoins": 20,
+          "multiplier": 3.105848208344212,
+          "nextCost": 2922
+        },
+        {
+          "bestFeet": 1837.0125163725138,
+          "level": 20,
+          "maxCoins": 846,
+          "meanCoinsPerContact": 404.7,
+          "meanDistanceFeet": 993.4373246470797,
+          "minCoins": 20,
+          "multiplier": 9.646293093274952,
+          "nextCost": 21344
+        },
+        {
+          "bestFeet": 2570.132509464302,
+          "level": 30,
+          "maxCoins": 1176,
+          "meanCoinsPerContact": 577,
+          "meanDistanceFeet": 1435.8474114111873,
+          "minCoins": 20,
+          "multiplier": 29.95992212091116,
+          "nextCost": 155904
+        },
+        {
+          "bestFeet": 3305.8730178839737,
+          "level": 40,
+          "maxCoins": 1507,
+          "meanCoinsPerContact": 804.08,
+          "meanDistanceFeet": 1872.417930179648,
+          "minCoins": 20,
+          "multiplier": 93.05097044136404
+        }
+      ],
+      "milestones": {
+        "1000": {
+          "attempts": 88,
+          "contacts": 61,
+          "level": 9,
+          "seconds": 469.2763870140815
+        },
+        "400": {
+          "attempts": 10,
+          "contacts": 7,
+          "level": 1,
+          "seconds": 48.668688854466495
+        },
+        "500": {
+          "attempts": 16,
+          "contacts": 11,
+          "level": 2,
+          "seconds": 79.26206687852915
+        },
+        "750": {
+          "attempts": 58,
+          "contacts": 41,
+          "level": 7,
+          "seconds": 296.065616451035
+        }
+      },
+      "purchases": [
+        {
+          "attempt": 5,
+          "attemptsSincePrevious": 5,
+          "contacts": 4,
+          "contactsSincePrevious": 4,
+          "cost": 400,
+          "level": 1
+        },
+        {
+          "attempt": 11,
+          "attemptsSincePrevious": 6,
+          "contacts": 8,
+          "contactsSincePrevious": 4,
+          "cost": 488,
+          "level": 2
+        },
+        {
+          "attempt": 17,
+          "attemptsSincePrevious": 6,
+          "contacts": 12,
+          "contactsSincePrevious": 4,
+          "cost": 596,
+          "level": 3
+        },
+        {
+          "attempt": 25,
+          "attemptsSincePrevious": 8,
+          "contacts": 17,
+          "contactsSincePrevious": 5,
+          "cost": 727,
+          "level": 4
+        },
+        {
+          "attempt": 31,
+          "attemptsSincePrevious": 6,
+          "contacts": 21,
+          "contactsSincePrevious": 4,
+          "cost": 887,
+          "level": 5
+        },
+        {
+          "attempt": 41,
+          "attemptsSincePrevious": 10,
+          "contacts": 29,
+          "contactsSincePrevious": 8,
+          "cost": 1082,
+          "level": 6
+        },
+        {
+          "attempt": 55,
+          "attemptsSincePrevious": 14,
+          "contacts": 38,
+          "contactsSincePrevious": 9,
+          "cost": 1319,
+          "level": 7
+        },
+        {
+          "attempt": 70,
+          "attemptsSincePrevious": 15,
+          "contacts": 49,
+          "contactsSincePrevious": 11,
+          "cost": 1610,
+          "level": 8
+        },
+        {
+          "attempt": 82,
+          "attemptsSincePrevious": 12,
+          "contacts": 57,
+          "contactsSincePrevious": 8,
+          "cost": 1964,
+          "level": 9
+        },
+        {
+          "attempt": 94,
+          "attemptsSincePrevious": 12,
+          "contacts": 65,
+          "contactsSincePrevious": 8,
+          "cost": 2395,
+          "level": 10
+        },
+        {
+          "attempt": 113,
+          "attemptsSincePrevious": 19,
+          "contacts": 79,
+          "contactsSincePrevious": 14,
+          "cost": 2922,
+          "level": 11
+        },
+        {
+          "attempt": 136,
+          "attemptsSincePrevious": 23,
+          "contacts": 95,
+          "contactsSincePrevious": 16,
+          "cost": 3565,
+          "level": 12
+        },
+        {
+          "attempt": 160,
+          "attemptsSincePrevious": 24,
+          "contacts": 111,
+          "contactsSincePrevious": 16,
+          "cost": 4349,
+          "level": 13
+        },
+        {
+          "attempt": 185,
+          "attemptsSincePrevious": 25,
+          "contacts": 129,
+          "contactsSincePrevious": 18,
+          "cost": 5306,
+          "level": 14
+        },
+        {
+          "attempt": 217,
+          "attemptsSincePrevious": 32,
+          "contacts": 151,
+          "contactsSincePrevious": 22,
+          "cost": 6473,
+          "level": 15
+        },
+        {
+          "attempt": 251,
+          "attemptsSincePrevious": 34,
+          "contacts": 174,
+          "contactsSincePrevious": 23,
+          "cost": 7897,
+          "level": 16
+        },
+        {
+          "attempt": 293,
+          "attemptsSincePrevious": 42,
+          "contacts": 204,
+          "contactsSincePrevious": 30,
+          "cost": 9635,
+          "level": 17
+        },
+        {
+          "attempt": 341,
+          "attemptsSincePrevious": 48,
+          "contacts": 237,
+          "contactsSincePrevious": 33,
+          "cost": 11754,
+          "level": 18
+        },
+        {
+          "attempt": 398,
+          "attemptsSincePrevious": 57,
+          "contacts": 276,
+          "contactsSincePrevious": 39,
+          "cost": 14340,
+          "level": 19
+        },
+        {
+          "attempt": 461,
+          "attemptsSincePrevious": 63,
+          "contacts": 320,
+          "contactsSincePrevious": 44,
+          "cost": 17495,
+          "level": 20
+        },
+        {
+          "attempt": 538,
+          "attemptsSincePrevious": 77,
+          "contacts": 373,
+          "contactsSincePrevious": 53,
+          "cost": 21344,
+          "level": 21
+        },
+        {
+          "attempt": 629,
+          "attemptsSincePrevious": 91,
+          "contacts": 437,
+          "contactsSincePrevious": 64,
+          "cost": 26039,
+          "level": 22
+        },
+        {
+          "attempt": 731,
+          "attemptsSincePrevious": 102,
+          "contacts": 508,
+          "contactsSincePrevious": 71,
+          "cost": 31768,
+          "level": 23
+        },
+        {
+          "attempt": 856,
+          "attemptsSincePrevious": 125,
+          "contacts": 595,
+          "contactsSincePrevious": 87,
+          "cost": 38756,
+          "level": 24
+        },
+        {
+          "attempt": 1000,
+          "attemptsSincePrevious": 144,
+          "contacts": 695,
+          "contactsSincePrevious": 100,
+          "cost": 47283,
+          "level": 25
+        },
+        {
+          "attempt": 1168,
+          "attemptsSincePrevious": 168,
+          "contacts": 811,
+          "contactsSincePrevious": 116,
+          "cost": 57685,
+          "level": 26
+        },
+        {
+          "attempt": 1367,
+          "attemptsSincePrevious": 199,
+          "contacts": 950,
+          "contactsSincePrevious": 139,
+          "cost": 70375,
+          "level": 27
+        },
+        {
+          "attempt": 1601,
+          "attemptsSincePrevious": 234,
+          "contacts": 1112,
+          "contactsSincePrevious": 162,
+          "cost": 85857,
+          "level": 28
+        },
+        {
+          "attempt": 1882,
+          "attemptsSincePrevious": 281,
+          "contacts": 1307,
+          "contactsSincePrevious": 195,
+          "cost": 104746,
+          "level": 29
+        },
+        {
+          "attempt": 2207,
+          "attemptsSincePrevious": 325,
+          "contacts": 1533,
+          "contactsSincePrevious": 226,
+          "cost": 127790,
+          "level": 30
+        },
+        {
+          "attempt": 2597,
+          "attemptsSincePrevious": 390,
+          "contacts": 1804,
+          "contactsSincePrevious": 271,
+          "cost": 155904,
+          "level": 31
+        }
+      ],
+      "tenMinuteSession": {
+        "attempts": 110,
+        "contacts": 76,
+        "earnedCoins": 13748,
+        "level": 10,
+        "seconds": 601.0623873349168
+      }
+    },
+    "Skilled": {
+      "after150Attempts": {
+        "coins": 11302,
+        "contacts": 150,
+        "earnedCoins": 62917,
+        "level": 17,
+        "seconds": 1902.818883353266
+      },
+      "gridAttempts": 72,
+      "gridContacts": 72,
+      "levels": [
+        {
+          "bestFeet": 402.9514400484125,
+          "level": 0,
+          "maxCoins": 201,
+          "meanCoinsPerContact": 157.47222222222223,
+          "meanDistanceFeet": 309.6354639046085,
+          "minCoins": 20,
+          "multiplier": 1,
+          "nextCost": 400
+        },
+        {
+          "bestFeet": 465.02908251790524,
+          "level": 1,
+          "maxCoins": 229,
+          "meanCoinsPerContact": 178.61111111111111,
+          "meanDistanceFeet": 356.9921443282544,
+          "minCoins": 20,
+          "multiplier": 1.12,
+          "nextCost": 488
+        },
+        {
+          "bestFeet": 744.7268631181827,
+          "level": 5,
+          "maxCoins": 355,
+          "meanCoinsPerContact": 270.47222222222223,
+          "meanDistanceFeet": 561.3010249962078,
+          "minCoins": 20,
+          "multiplier": 1.7623416832000007,
+          "nextCost": 1082
+        },
+        {
+          "bestFeet": 1123.9433931982664,
+          "level": 10,
+          "maxCoins": 525,
+          "meanCoinsPerContact": 382.40277777777777,
+          "meanDistanceFeet": 810.8902269455393,
+          "minCoins": 0,
+          "multiplier": 3.105848208344212,
+          "nextCost": 2922
+        },
+        {
+          "bestFeet": 1891.7718726008297,
+          "level": 20,
+          "maxCoins": 871,
+          "meanCoinsPerContact": 606.9444444444445,
+          "meanDistanceFeet": 1309.7345090077301,
+          "minCoins": 20,
+          "multiplier": 9.646293093274952,
+          "nextCost": 21344
+        },
+        {
+          "bestFeet": 2635.9666123576,
+          "level": 30,
+          "maxCoins": 1206,
+          "meanCoinsPerContact": 860.375,
+          "meanDistanceFeet": 1872.8253011293402,
+          "minCoins": 20,
+          "multiplier": 29.95992212091116,
+          "nextCost": 155904
+        },
+        {
+          "bestFeet": 3371.3603332755365,
+          "level": 40,
+          "maxCoins": 1537,
+          "meanCoinsPerContact": 1130.3333333333333,
+          "meanDistanceFeet": 2472.7676160362043,
+          "minCoins": 20,
+          "multiplier": 93.05097044136404
+        }
+      ],
+      "milestones": {
+        "1000": {
+          "attempts": 37,
+          "contacts": 37,
+          "level": 9,
+          "seconds": 356.1373762574901
+        },
+        "400": {
+          "attempts": 4,
+          "contacts": 4,
+          "level": 1,
+          "seconds": 32.29390175454624
+        },
+        "500": {
+          "attempts": 7,
+          "contacts": 7,
+          "level": 2,
+          "seconds": 54.132168401975676
+        },
+        "750": {
+          "attempts": 22,
+          "contacts": 22,
+          "level": 6,
+          "seconds": 196.60057021337988
+        }
+      },
+      "purchases": [
+        {
+          "attempt": 3,
+          "attemptsSincePrevious": 3,
+          "contacts": 3,
+          "contactsSincePrevious": 3,
+          "cost": 400,
+          "level": 1
+        },
+        {
+          "attempt": 5,
+          "attemptsSincePrevious": 2,
+          "contacts": 5,
+          "contactsSincePrevious": 2,
+          "cost": 488,
+          "level": 2
+        },
+        {
+          "attempt": 8,
+          "attemptsSincePrevious": 3,
+          "contacts": 8,
+          "contactsSincePrevious": 3,
+          "cost": 596,
+          "level": 3
+        },
+        {
+          "attempt": 11,
+          "attemptsSincePrevious": 3,
+          "contacts": 11,
+          "contactsSincePrevious": 3,
+          "cost": 727,
+          "level": 4
+        },
+        {
+          "attempt": 16,
+          "attemptsSincePrevious": 5,
+          "contacts": 16,
+          "contactsSincePrevious": 5,
+          "cost": 887,
+          "level": 5
+        },
+        {
+          "attempt": 20,
+          "attemptsSincePrevious": 4,
+          "contacts": 20,
+          "contactsSincePrevious": 4,
+          "cost": 1082,
+          "level": 6
+        },
+        {
+          "attempt": 25,
+          "attemptsSincePrevious": 5,
+          "contacts": 25,
+          "contactsSincePrevious": 5,
+          "cost": 1319,
+          "level": 7
+        },
+        {
+          "attempt": 29,
+          "attemptsSincePrevious": 4,
+          "contacts": 29,
+          "contactsSincePrevious": 4,
+          "cost": 1610,
+          "level": 8
+        },
+        {
+          "attempt": 35,
+          "attemptsSincePrevious": 6,
+          "contacts": 35,
+          "contactsSincePrevious": 6,
+          "cost": 1964,
+          "level": 9
+        },
+        {
+          "attempt": 42,
+          "attemptsSincePrevious": 7,
+          "contacts": 42,
+          "contactsSincePrevious": 7,
+          "cost": 2395,
+          "level": 10
+        },
+        {
+          "attempt": 50,
+          "attemptsSincePrevious": 8,
+          "contacts": 50,
+          "contactsSincePrevious": 8,
+          "cost": 2922,
+          "level": 11
+        },
+        {
+          "attempt": 58,
+          "attemptsSincePrevious": 8,
+          "contacts": 58,
+          "contactsSincePrevious": 8,
+          "cost": 3565,
+          "level": 12
+        },
+        {
+          "attempt": 68,
+          "attemptsSincePrevious": 10,
+          "contacts": 68,
+          "contactsSincePrevious": 10,
+          "cost": 4349,
+          "level": 13
+        },
+        {
+          "attempt": 80,
+          "attemptsSincePrevious": 12,
+          "contacts": 80,
+          "contactsSincePrevious": 12,
+          "cost": 5306,
+          "level": 14
+        },
+        {
+          "attempt": 94,
+          "attemptsSincePrevious": 14,
+          "contacts": 94,
+          "contactsSincePrevious": 14,
+          "cost": 6473,
+          "level": 15
+        },
+        {
+          "attempt": 111,
+          "attemptsSincePrevious": 17,
+          "contacts": 111,
+          "contactsSincePrevious": 17,
+          "cost": 7897,
+          "level": 16
+        },
+        {
+          "attempt": 129,
+          "attemptsSincePrevious": 18,
+          "contacts": 129,
+          "contactsSincePrevious": 18,
+          "cost": 9635,
+          "level": 17
+        },
+        {
+          "attempt": 151,
+          "attemptsSincePrevious": 22,
+          "contacts": 151,
+          "contactsSincePrevious": 22,
+          "cost": 11754,
+          "level": 18
+        },
+        {
+          "attempt": 177,
+          "attemptsSincePrevious": 26,
+          "contacts": 177,
+          "contactsSincePrevious": 26,
+          "cost": 14340,
+          "level": 19
+        },
+        {
+          "attempt": 206,
+          "attemptsSincePrevious": 29,
+          "contacts": 206,
+          "contactsSincePrevious": 29,
+          "cost": 17495,
+          "level": 20
+        },
+        {
+          "attempt": 242,
+          "attemptsSincePrevious": 36,
+          "contacts": 242,
+          "contactsSincePrevious": 36,
+          "cost": 21344,
+          "level": 21
+        },
+        {
+          "attempt": 283,
+          "attemptsSincePrevious": 41,
+          "contacts": 283,
+          "contactsSincePrevious": 41,
+          "cost": 26039,
+          "level": 22
+        },
+        {
+          "attempt": 332,
+          "attemptsSincePrevious": 49,
+          "contacts": 332,
+          "contactsSincePrevious": 49,
+          "cost": 31768,
+          "level": 23
+        },
+        {
+          "attempt": 389,
+          "attemptsSincePrevious": 57,
+          "contacts": 389,
+          "contactsSincePrevious": 57,
+          "cost": 38756,
+          "level": 24
+        },
+        {
+          "attempt": 455,
+          "attemptsSincePrevious": 66,
+          "contacts": 455,
+          "contactsSincePrevious": 66,
+          "cost": 47283,
+          "level": 25
+        },
+        {
+          "attempt": 535,
+          "attemptsSincePrevious": 80,
+          "contacts": 535,
+          "contactsSincePrevious": 80,
+          "cost": 57685,
+          "level": 26
+        },
+        {
+          "attempt": 628,
+          "attemptsSincePrevious": 93,
+          "contacts": 628,
+          "contactsSincePrevious": 93,
+          "cost": 70375,
+          "level": 27
+        },
+        {
+          "attempt": 737,
+          "attemptsSincePrevious": 109,
+          "contacts": 737,
+          "contactsSincePrevious": 109,
+          "cost": 85857,
+          "level": 28
+        },
+        {
+          "attempt": 867,
+          "attemptsSincePrevious": 130,
+          "contacts": 867,
+          "contactsSincePrevious": 130,
+          "cost": 104746,
+          "level": 29
+        },
+        {
+          "attempt": 1021,
+          "attemptsSincePrevious": 154,
+          "contacts": 1021,
+          "contactsSincePrevious": 154,
+          "cost": 127790,
+          "level": 30
+        },
+        {
+          "attempt": 1202,
+          "attemptsSincePrevious": 181,
+          "contacts": 1202,
+          "contactsSincePrevious": 181,
+          "cost": 155904,
+          "level": 31
+        },
+        {
+          "attempt": 1417,
+          "attemptsSincePrevious": 215,
+          "contacts": 1417,
+          "contactsSincePrevious": 215,
+          "cost": 190202,
+          "level": 32
+        },
+        {
+          "attempt": 1670,
+          "attemptsSincePrevious": 253,
+          "contacts": 1670,
+          "contactsSincePrevious": 253,
+          "cost": 232047,
+          "level": 33
+        },
+        {
+          "attempt": 1972,
+          "attemptsSincePrevious": 302,
+          "contacts": 1972,
+          "contactsSincePrevious": 302,
+          "cost": 283097,
+          "level": 34
+        },
+        {
+          "attempt": 2329,
+          "attemptsSincePrevious": 357,
+          "contacts": 2329,
+          "contactsSincePrevious": 357,
+          "cost": 345378,
+          "level": 35
+        },
+        {
+          "attempt": 2752,
+          "attemptsSincePrevious": 423,
+          "contacts": 2752,
+          "contactsSincePrevious": 423,
+          "cost": 421361,
+          "level": 36
+        }
+      ],
+      "tenMinuteSession": {
+        "attempts": 57,
+        "contacts": 57,
+        "earnedCoins": 17573,
+        "level": 11,
+        "seconds": 607.3340569151032
+      }
+    }
+  },
+  "stability": {
+    "futureThinAir": {
+      "airDensityScale": 0.05,
+      "endReason": "MaxDistance",
+      "steps": 1705,
+      "trackedFeet": 32809.7529589743
+    }
+  }
+}

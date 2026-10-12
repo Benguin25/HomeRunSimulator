@@ -13,6 +13,7 @@ local Gate = require(Gameplay.ReturnGate)
 local LandingDetector = require(Shared.BattedBall.LandingDetector)
 local PitchNet = require(Shared.Pitching.PitchNet)
 local Config = require(Gameplay.GameplayConfig)
+local ProgressionServer = require(script.Parent.ProgressionServer)
 local Server = {}
 type PlayerState = { stats: Stats.State, version: number, rejection: string, lastRequest: number }
 type LaneState = { player: Player, gate: Gate.State }
@@ -116,6 +117,7 @@ function Server.launch(laneId: string, player: Player, hitId: number, pitchId: n
 		return
 	end
 	Gate.begin(lane.gate, hitId, pitchId)
+	ProgressionServer.launch(player, hitId)
 	publish(player)
 end
 function Server.resolve(laneId: string, hitId: number, outcome: LandingDetector.OutcomePayload)
@@ -126,6 +128,7 @@ function Server.resolve(laneId: string, hitId: number, outcome: LandingDetector.
 	end
 	if Gate.resolve(lane.gate, hitId, Workspace:GetServerTimeNow()) then
 		Stats.resolve(state.stats, hitId, outcome)
+		ProgressionServer.resolve(lane.player, hitId, outcome)
 		publish(lane.player)
 	end
 end
@@ -136,6 +139,7 @@ function Server.cancel(laneId: string, hitId: number)
 		return
 	end
 	Stats.cancel(state.stats, hitId)
+	ProgressionServer.cancel(lane.player, hitId)
 	local ready = lane.gate.characterReady
 	lane.gate = Gate.new(lane.player.UserId, nextEpoch(), Workspace:GetServerTimeNow())
 	lane.gate.characterReady = ready

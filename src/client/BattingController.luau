@@ -43,6 +43,7 @@ local BattingDebugView = require(script.Parent.BattingDebugView)
 local BattingPresentation = require(script.Parent.BattingPresentation)
 local CharacterGrip = require(script.Parent.CharacterGrip)
 local PitchVisualController = require(script.Parent.PitchVisualController)
+local ProgressionController = require(script.Parent.ProgressionController)
 
 local BattingController = {}
 
@@ -224,6 +225,7 @@ local function onRender(dt: number)
 end
 
 local function trySwing()
+	if ProgressionController.isOpen() then return end
 	local geo = geometry
 	local lane = laneId
 	if not active or not geo or not lane or not aimInitialized or not BattingCamera.isBattingView() then

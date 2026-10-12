@@ -20,6 +20,7 @@ local BattedBallConfig = require(script.Parent.BattedBallConfig)
 local FieldFrame = require(script.Parent.FieldFrame)
 local FlightPhysics = require(script.Parent.FlightPhysics)
 local ImpactModel = require(script.Parent.ImpactModel)
+local ProgressionConfig = require(Shared.Progression.ProgressionConfig)
 
 local BattedBall = {}
 
@@ -32,6 +33,8 @@ export type LaunchData = {
 	position: Vector3, -- world studs: ball center at contact
 	velocity: Vector3, -- field frame, m/s (x forward, y up, z right)
 	spin: Vector3, -- field frame, rad/s
+	powerLevel: number?, -- captured at accepted server contact; prediction metadata only
+	powerVersion: number?,
 }
 
 export type Flight = {
@@ -156,6 +159,12 @@ end
 
 -- Server and clients: rebuild the full flight from launch data.
 function BattedBall.buildFlight(frame: FieldFrame.Frame, launch: LaunchData, flightConfig: FlightConfig?): Flight
+	if not flightConfig and launch.powerLevel and launch.powerLevel > 0 then
+		local expanded = table.clone(BattedBallConfig.Flight)
+		expanded.MaxFlightSeconds = ProgressionConfig.Limits.MaxFlightSeconds
+		expanded.MaxHorizontalDistanceMeters = ProgressionConfig.Limits.MaxDistanceMeters
+		flightConfig = expanded
+	end
 	local params = BattedBall.buildParams(launch.spin, flightConfig)
 	local x0, y0, z0 = FieldFrame.toField(frame, launch.position)
 	local v = launch.velocity
@@ -227,6 +236,8 @@ function BattedBall.encode(launch: LaunchData, endTime: number): { any }
 		launch.velocity,
 		launch.spin,
 		endTime,
+		launch.powerLevel or 0,
+		launch.powerVersion or 0,
 	}
 end
 
@@ -243,6 +254,8 @@ function BattedBall.decode(packet: any): (LaunchData?, number?)
 		position = packet[6],
 		velocity = packet[7],
 		spin = packet[8],
+		powerLevel = packet[10] or 0,
+		powerVersion = packet[11] or 0,
 	}
 	if
 		typeof(launch.hitId) ~= "number"
@@ -262,6 +275,7 @@ end
 function BattedBall.sameLaunch(a: LaunchData, b: LaunchData, tolerance: number?): boolean
 	local tol = tolerance or 1e-4
 	return math.abs(a.launchTime - b.launchTime) < 1e-6
+		and (a.powerLevel or 0) == (b.powerLevel or 0)
 		and (a.position - b.position).Magnitude < tol
 		and (a.velocity - b.velocity).Magnitude < tol
 		and (a.spin - b.spin).Magnitude < tol * 100

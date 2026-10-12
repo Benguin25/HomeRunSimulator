@@ -29,6 +29,7 @@ local LandingDetector = require(Shared.BattedBall.LandingDetector)
 
 local CameraMath = require(script.Parent.CameraMath)
 local PresentationConfig = require(script.Parent.PresentationConfig)
+local ProgressionConfig = require(Shared.Progression.ProgressionConfig)
 
 local CameraDirector = {}
 CameraDirector.__index = CameraDirector
@@ -375,7 +376,11 @@ function CameraDirector.update(self: CameraDirector, now: number, dt: number, ba
 	hit = self.hit
 	if hit and (self.state == "ContactTransition" or self.state == "BallFollow" or self.state == "Landing") then
 		local launchTime = hit.flight.launch.launchTime
-		if now - launchTime > timing.MaxHitSeconds then
+		local watchdog = timing.MaxHitSeconds
+		if (hit.flight.launch.powerLevel or 0) > 0 then
+			watchdog = math.max(watchdog, hit.flight.trajectory.duration + ProgressionConfig.Limits.CameraWatchdogGraceSeconds)
+		end
+		if now - launchTime > watchdog then
 			startReturn(self, now, "watchdog")
 		else
 			local follow = stepFollow(self, hit, now, dt)
