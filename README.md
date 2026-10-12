@@ -409,7 +409,7 @@ C_L(S) = Sawicki–Hubbard–Stronge (shared with pitching: PitchPhysics.liftCoe
 2. On contact, `PitchServer.resolveContact` ends the pitch. Only if that succeeds (so a contact can never launch twice) does `BattedBallServer.launch` run.
 3. The server runs the impact model, builds the flight from the **launch record itself**, and sweeps it with `Workspace:Spherecast`. The stadium is static, so the outcome is known at launch.
 4. `HitLifecycle` pauses the lane's pitching and broadcasts one `Launch` message: the launch record (contact position, field velocity and spin as Vector3s, contact server time) plus the server's flight end time.
-5. At `launchTime + endTime` it broadcasts `Resolved`, exactly once, with the outcome. It then holds `ResultHoldSeconds` (1.5 s), unpauses the lane, and the normal Ready → Windup cycle continues.
+5. At `launchTime + endTime` it broadcasts `Resolved`, exactly once, with the outcome. It then holds `ResultHoldSeconds` (2.4 s since Stage 4, covering the camera's landing hold and return), unpauses the lane, and the normal Ready → Windup cycle continues.
 6. **Edge cases:**
    - A second launch on a busy lane is refused.
    - When the batter **leaves**, the hit is cancelled and clients remove the ball.
@@ -430,10 +430,10 @@ Traffic per hit is three messages at most (`Launch`, `Resolved`, `Cancelled`), p
 - **Frame rate.** Position is `BattedBall.positionAt(flight, serverNow − launchTime)`, so every frame rate gives the same path.
 - **Ball and landing.**
   - The ball uses the existing `BallVisual`, with a longer trail (0.35 s) and slowed visual spin.
-  - It rests at the impact point for 1.2 s, then fades.
-  - A landing ring with a distance billboard appears, and the batter sees a headline label: the distance (e.g. "265 FT"), "FOUL" or "OFF THE WALL", plus EV and launch angle.
+  - It rests at the impact point for 1.6 s, then fades.
+  - A landing ring with a distance billboard appears. The batter's result is shown by the Stage 4 result card (see below).
 - **Units.** Feet by default; `Display.DistanceUnit = "Meters"` switches to meters.
-- **Camera.** The batting camera is unchanged; the follow camera is Phase 3B.
+- **Camera.** See Stage 4: the batting camera now hands off to a cinematic ball-follow camera.
 - **Removed.** The Phase 2 `TemporaryDeflection` is gone.
 
 ### Configuration (`BattedBallConfig`)
@@ -465,7 +465,7 @@ Traffic per hit is three messages at most (`Launch`, `Resolved`, `Cancelled`), p
 | `Collision.RespectCanCollide`, `IgnoreTag`, `IgnoreWorkspaceChildren` | | | Server raycast filter |
 | `Collision.BaseDistanceMeters` | 27.43 | m | Provisional fair/foul threshold |
 | `FoulLines.*` | 45°, 70–110° | deg | Rulebook fallback and marker sanity range |
-| `Lifecycle.ResultHoldSeconds` | 1.5 | s | Lane hold after the first impact |
+| `Lifecycle.ResultHoldSeconds` | 2.4 | s | Lane hold after the first impact (≥ Stage 4 landing hold + camera return + margin; tested) |
 | `Lifecycle.PredictionTimeoutSeconds` | 1.25 | s | Removes an unconfirmed prediction |
 | `Display.*` | | | Unit, trail, visual spin, hold/fade, landing marker, label seconds |
 | `Debug.*` | | | Trajectory dots, foul lines, Output logging |
@@ -581,7 +581,7 @@ The server log line for each hit reports the measured simulation and sweep milli
    - the `HIT` line goes flying → resolved;
    - the outcome line's "client flight at that time" sits at the server's impact point.
 5. **Walls and fouls.** Hit balls toward the fence or into foul territory and check `OFF THE WALL` and `FOUL` outcomes. Check that the measured carry only appears for ground landings.
-6. **Pitching loop.** Take several hits in a row. The next pitch's windup should begin only about 1.5 s after the previous ball came down.
+6. **Pitching loop.** Take several hits in a row. The next pitch's windup should begin only about 2.4 s after the previous ball came down (after the camera is back).
 7. **Interrupted flights.** Reset mid-flight: the ball keeps flying, and pitching resumes after it lands. With two players (Test > Clients and Servers), check that the other client sees the same flight, and that leaving mid-flight removes the ball for everyone.
 8. **Output.** Check the `[BattedBall]` log lines, including the server's `sim … ms` and `sweep … ms` timings.
 
@@ -595,3 +595,224 @@ The server log line for each hit reports the measured simulation and sweep milli
 - Server cost per hit on Roblox hardware (logged per hit), and the client frame hitch at contact (≈4 ms in Lune).
 - Message ordering and the prediction adopt/replace behavior under real latency.
 - Late joiners don't receive a ball that is already in flight. There is no snapshot yet, unlike pitches.
+
+## Stage 4: Cinematic camera and hitting feedback
+
+Presentation only. Pitching, swings, the impact model, flight physics, landing detection and all networking are unchanged. The one lifecycle change is that `ResultHoldSeconds` went from 1.5 s to 2.4 s so the camera is back before the next windup.
+
+### Layout
+
+| Path | Runs on | Purpose |
+| --- | --- | --- |
+| `src/shared/Presentation/PresentationConfig.luau` | both | All Stage 4 tunables: timing, camera profiles, smoothing, shake, intensity, impact, trail and halo, HUD, sounds |
+| `src/shared/Presentation/CameraMath.luau` | both (pure) | Critically damped springs, yaw/pitch (no roll), launch-angle profiles, heading, follow pose, occlusion easing, impulse |
+| `src/shared/Presentation/CameraDirector.luau` | both (pure) | The hit camera state machine. Its targets come from the deterministic flight. |
+| `src/shared/Presentation/HitPresentation.luau` | both (pure) | Contact intensity and tier, live and final distance counter, result summary, trail style, halo |
+| `src/client/BattingCamera.luau` | client | Still the only writer of `CurrentCamera`. Owns the director, applies its pose, avoids occlusion with one raycast per frame. |
+| `src/client/HitEffects.luau` | client | Impact flash, ring and sparks; tiered crack sounds; landing puff and thud; optional whoosh |
+| `src/client/HitHud.luau` | client | Distance counter, result card, and the camera/presentation section of the F7 overlay |
+| `src/shared/BattedBall/BattedBallPlayback.luau` | client | (changed) Speed-dependent trail and a distance halo |
+
+### Camera lifecycle
+
+```
+Batting -> ContactTransition -> BallFollow -> Landing -> Returning -> Batting
+   ^             |                  |            |
+   +-------------+------------------+------------+-- cancel / watchdog: Returning from the current pose
+```
+
+- **Batting.** This is the existing framing. A predicted hit is registered at the click, but the camera only moves at the contact server time.
+- **ContactTransition.** The camera holds for a 0.06 s beat (camera only; the ball is never paused), then blends over 0.4 s from the batting pose to the follow pose. The blend runs on its own clock, so a ball that lands during it still blends.
+- **BallFollow.** The camera follows the flight (see below).
+- **Landing.** This starts at `launchTime + endTime`, the server's first impact. The camera eases to a slightly wider view of the impact and holds for 1.3 s. If the server's outcome has not arrived, it waits up to 0.75 s more.
+- **Returning.** The camera blends back to the batting pose over 0.85 s with a sine ease and a small upward arc. On a ~80 m fly-back the peak speed is under 3 m per 60 fps frame (tested).
+- **Reconciliation:**
+  - **Confirmed prediction:** keeps going.
+  - **Corrected record (same pitch):** the director swaps the flight under its smoothed offsets, and the change is counted as a sync correction.
+  - **Rejected or timed-out prediction:** before contact nothing happens; after contact the camera returns.
+  - **Server `Cancelled`, a respawn, or leaving the lane:** the camera returns, or resets when the lane is left. Leaving the lane also restores the Roblox `Custom` camera and FOV.
+  - **Watchdog:** a hit presentation is capped at `MaxHitSeconds` (20 s).
+- **Lane isolation.** The director only accepts hits launched on its lane. Every event is keyed by `(laneId, pitchId)`, because pitch ids are per-lane counters.
+- **Pitch coordination.** The server's post-landing hold (`ResultHoldSeconds = 2.4`) must be at least `LandingHoldSeconds + ReturnSeconds` plus 0.1 s, and a test enforces this. The next windup therefore never starts while the camera is away. Swings are ignored unless the camera is in `Batting`.
+
+### How the follow camera frames the ball
+
+- **Target.** The target is `BattedBall.positionAt(flight, serverNow - launchTime)`, the same call that places the ball. The camera can't lose its target because it never depends on a Part.
+- **Anchor.** The camera is anchored to where the ball was `LagSeconds` ago (sampled from the trajectory, capped at `MaxLagMeters`), so the ball visibly pulls away by a bounded amount.
+- **Position.** From the anchor the camera sits `Back` behind it along a smoothed horizontal heading, `Height` above, and `Side` toward the batter's side (the same side as the batting camera, so the transition doesn't swing across).
+- **Climbs.** `VerticalFollow < 1` keeps the camera lower while the ball climbs, which sells height.
+- **Look point.** The camera looks at the ball, plus a look-ahead along the velocity (vertical part scaled by 0.35 for a calm horizon), minus `LookDown`, which keeps the outfield below a fly ball in view.
+- **Hit-type profiles.** `Profiles` are keyed by launch angle: Grounder 0°, LineDrive 16°, FlyBall 32°, PopUp 55°. Values blend linearly between anchors, so there is no cliff at a category boundary.
+- **Power.** Power (exit velocity from 55 to 110 mph, clamped) adds up to 35% pullback and 6° of FOV. A 300 mph future hit stays within those limits (tested).
+- **Smoothing.** The camera *offset from the ball*, the look offset and the FOV are exact critically damped springs. For a fixed target the result is identical at any frame rate. Because the offset is smoothed rather than the absolute position, speed never turns into lag, and the ball stays framed even for very fast hits.
+- **Orientation.** Orientation is yaw plus pitch with zero roll (no banking, level horizon). Pitch is clamped to ±65°, which avoids the `lookAt` degeneracy and 180° flips. The heading turns at most 90°/s, and keeps its last value when the ball has under 2 m/s of horizontal speed (straight-up pop-ups).
+- **Ground.** The camera stays at least 1.2 m above plate level.
+- **Occlusion (client).** One raycast per frame goes from the ball to the camera, excluding characters and our visuals. The camera is clamped in front of blocking geometry immediately and eases back out over 0.5 s.
+
+**Measured (CLI, 60 fps, default config):**
+
+| Hit | EV | Launch | Flight | Ball off-axis (max) | Camera-ball | Full cycle |
+| --- | --- | --- | --- | --- | --- | --- |
+| Grounder | 75 mph | 4° | 0.64 s | 21% of half-FOV | 10-11 m | 3.1 s |
+| Line drive | 80 mph | 15° | 2.44 s | 19% | 12-13 m | 4.9 s |
+| Fly ball | 76 mph | 30° | 4.18 s | 23% | 14-15 m | 6.6 s |
+| Pop-up | 62 mph | 72° | 5.00 s | 33% | 12-15 m | 7.5 s |
+
+Frame-rate consistency for the fly ball, against 240 fps: at 30 fps the poses differ by 8.5 cm and 0.15°; at 144 fps, by 0.9 cm and 0.015°.
+
+### Contact feedback
+
+- **Intensity (0-1).** `HitPresentation.intensity` combines four measured values: exit velocity (0.45), contact quality score (0.25), bat-ball closing speed (0.15) and sweet-spot offset (0.15). The result is then scaled by a launch-angle factor that peaks at 25° and never drops below 0.6x. Before the flight is known, the quality score stands in for exit velocity. Nothing is random.
+- **Tiers.** Weak (< 0.4), Solid, and Crushed (>= 0.72). The tier picks the crack sound and the spark count. Solid and Crushed also get an expanding ring aligned with the ball's outgoing direction.
+- **Burst.** A flash at the real contact point, sized 0.12-0.35 m by intensity.
+- **Camera impulse.** Fires only at intensity >= 0.45. It is a deterministic decaying oscillation of at most 0.9° over 0.35 s, plus an FOV punch of up to 3°. Set `Shake.Enabled = false` to turn it off.
+- **No hitstop or slow motion.** The 0.06 s contact hold holds the camera only. The ball, the server clock and the physics never pause.
+- **Changes to the old contact effects.** The Phase 2 flash, sparks and contact sound in `BattingPresentation` are replaced. The 0.35° camera kick is replaced by the impulse. The contact marker and quality label are kept.
+
+### Ball flight visuals
+
+- **Trail.** The trail grows with speed between 15 and 45 m/s: lifetime 0.18-0.45 s and opacity 25-65%. It is quantized to 8 levels, so its properties change only a few times per flight.
+- **Halo.** A 9 px screen-space halo dot fades in between 8 and 22 m from the camera, so the ball stays findable at distance. It is not `AlwaysOnTop`, so walls still hide it.
+- **Ball model and path.** The ball model and its path are unchanged.
+
+### HUD
+
+- **Distance counter** (top center):
+  - It appears 0.15 s after contact.
+  - While flying it shows `DISTANCE` with a red `LIVE` pill. The value is `BattedBall.distanceAt`: horizontal displacement from home plate, not path length.
+  - When the ball stops, the label depends on the server's answer:
+
+    | Situation | Label | Number | Pill |
+    | --- | --- | --- | --- |
+    | Server answer not in yet | - | Grey | `CONFIRMING` |
+    | Ground landing | `CARRY` | Server's `carryMeters`, punches in | `FINAL` (gold) or `FOUL` |
+    | Wall hit | `HIT THE WALL AT` | Impact distance | `NO CARRY` |
+    | No impact | `TRACKED TO` | Last tracked distance | `NO LANDING` |
+- **Result card** (bottom center):
+  - It appears 0.12 s after the server's outcome while the camera holds on the landing.
+  - The headline is FAIR BALL, FOUL BALL, OFF THE WALL, OFF THE ROOF or OUT OF RANGE.
+  - The big number is the distance, labelled DISTANCE, HIT AT or TRACKED TO.
+  - A note line appears only when needed: a provisional fair/foul call, "no carry measured", or "left the tracked area".
+  - Chips show EXIT VELO, LAUNCH and CONTACT. The contact label is the server's, or the prediction's until the server's arrives.
+  - The card fades as the camera returns. There are no coins, XP or personal bests.
+- **Batting HUD.** The reticle, barrel line and zone outline hide while the camera is away. They return over the last 40% of the return.
+- **Scaling.** Panels scale with the viewport: `min(w/1280, h/720)`, clamped to 0.6-1.25.
+
+### Sounds
+
+`PresentationConfig.Sounds` has hooks for weak, solid and crushed contact (plus a crushed layer), the flight whoosh, the landing, a wall hit, and the result tick. Each hook has a volume and speed, `MasterVolume` scales them all, and `MinGapSeconds` (0.08 s) stops spam. The current IDs are placeholders that I verified ship with the Roblox client (`content/sounds`): `action_jump_land.mp3`, `impact_explosion_03.mp3` and `volume_slider.ogg`. No marketplace asset IDs were invented.
+
+**Assets you still need to supply:** a wood-bat crack in three intensities, a ball whoosh loop (currently off: `Whoosh.Id = ""`), a grass thud, a wall knock and a UI tick.
+
+### Configuration highlights (`PresentationConfig`)
+
+| Key | Default | Meaning |
+| --- | --- | --- |
+| `Timing.ContactHoldSeconds` | 0.06 | Camera-only beat at contact (0 = off) |
+| `Timing.ContactTransitionSeconds` | 0.4 | Blend into ball-follow |
+| `Timing.LandingHoldSeconds` | 1.3 | Hold on the impact |
+| `Timing.ReturnSeconds` | 0.85 | Blend back to batting |
+| `Timing.OutcomeGraceSeconds` | 0.75 | Extra wait for a late server outcome |
+| `Profiles[*]` | see file | Back / Height / Side / LagSeconds / VerticalFollow / LookAheadSeconds / LookDown / FieldOfView per launch angle |
+| `Camera.OffsetSmoothSeconds` / `LookSmoothSeconds` / `FovSmoothSeconds` | 0.35 / 0.18 / 0.4 | Spring time constants |
+| `Camera.PowerPullbackScale` / `PowerFovBonus` | 0.35 / 6° | Extra framing for powerful hits |
+| `Camera.MaxPitchDegrees` / `MaxHeadingDegreesPerSecond` | 65 / 90 | Orientation limits |
+| `Shake.*` | 0.9° max, 0.35 s | Contact impulse (`Enabled = false` to disable) |
+| `Flight.Trail*`, `Flight.Halo*` | see file | Flight readability |
+| `Hud.*` | see file | Counter and card timing and scale |
+| `Sounds.*` | placeholders | See above |
+
+Related changes in `BattedBallConfig`: `Lifecycle.ResultHoldSeconds` 1.5 -> 2.4 (coordination) and `Display.LandedHoldSeconds` 1.2 -> 1.6 (the ball stays visible through the landing hold). `Display.ResultLabelSeconds` was removed (replaced by the card). In `BattingConfig.Presentation`, `ContactSound*` and `CameraKick*` were removed (moved to `PresentationConfig`).
+
+### Debug (F7, Studio only)
+
+The new `CAMERA` section shows:
+- the camera state and presentation phase, the last transition event, the transition count, and the sync-correction count;
+- the pitch and whether it is confirmed, the profile and power, the camera target (ball) position, the follow offset (m), the smoothing error (m), the occlusion distance and the FOV;
+- the displayed distance and counter state next to the authoritative landing distance (or `pending`), and the ball time.
+
+### Tests (pure Luau: Studio + Lune CLI)
+
+- **`CameraMath.spec`:**
+  - spring identical at 30, 60, 120, 144 and 240 fps; no overshoot; survives a hitch;
+  - frame-rate-independent `damp`;
+  - yaw/pitch matching `CFrame.fromEulerAnglesYXZ`, with no roll;
+  - pitch clamp at straight up and down;
+  - shortest-way yaw blending, and the return arc;
+  - profile anchors and continuity;
+  - power clamp;
+  - heading rate limit and pop-up hold;
+  - occlusion behaviour;
+  - impulse bounds, determinism and end.
+- **`CameraDirector.spec`:**
+  - the full state sequence on straight and rotated lanes, ending exactly on the batting pose, with the return under 3 m per frame;
+  - no movement before contact time;
+  - a prediction rejected before contact (never leaves the batter) and after contact (smooth return);
+  - a server correction with no jump;
+  - grounder, line-drive, fly-ball and pop-up framing (ball inside 90% of the half-FOV every frame, camera above the field, pitch limit, profile choice, fly balls pulled back further);
+  - power widening, capped at 300 mph;
+  - 30, 60, 120 and 144 fps against 240 fps (< 0.25 m, < 1.5°);
+  - pop-up apex stability (< 2.5° per frame, < 60° total swing);
+  - a landing during the blend;
+  - a missing server outcome;
+  - reset, respawn and the watchdog;
+  - other lanes and other pitches ignored, with two directors kept independent;
+  - 50 repeated hits leaving nothing over;
+  - hold coordination with `ResultHoldSeconds`.
+- **`HitPresentation.spec`:**
+  - the live counter equals horizontal distance (and is shorter than the path length), monotonic, hidden before the delay;
+  - `CONFIRMING` until the server answers, then the server's carry (even when it differs), and `FOUL`;
+  - wall hits never shown as carry, and `NoImpact` labelled as tracked;
+  - summary values match the flight and outcome (EV, launch, contact, provisional note, missing outcome);
+  - feet formatting;
+  - intensity monotonic in each input and bounded;
+  - a real squared-up swing more intense than a jammed one;
+  - trail quantization, and the halo.
+
+### Playtesting Stage 4 in Studio
+
+1. **Line drive.** Start a Play session and aim about 1-2 cm under the ball. At contact, check for:
+   - a crack and a burst at the bat;
+   - a short beat;
+   - a smooth (about 0.45 s) swing into a 3/4 view behind the ball.
+
+   During the flight:
+   - the ball should stay near screen center with the field rushing past;
+   - the counter should read `DISTANCE ... LIVE` and climb smoothly;
+   - the reticle and zone should be hidden.
+2. **Fly ball.** Aim about 3-4 cm under the ball. The camera should sit higher and farther back, with the outfield visible beneath the ball near the apex and no tilt or flip. On landing, check for:
+   - a dust puff and thud;
+   - the number turning gold and punching to `CARRY ... FINAL`;
+   - the card rising with FAIR BALL, the distance, EV, launch and contact.
+
+   About 1.3 s later the camera should fly back smoothly, the card should fade, and the reticle should fade back in before the next windup.
+3. **Grounder.** Aim at or slightly above the ball's center. You should get a low, calm follow. A very short chopper may land during the transition, and the camera should still blend rather than snap.
+4. **Pop-up.** Aim well under the ball. The camera should hold its heading while the ball goes nearly straight up, without spinning.
+5. **Wall.** Hit something into a fence or stands. The counter should read `HIT THE WALL AT ... NO CARRY`, the card should say OFF THE WALL with the height, and the camera should not clip into the wall. If it does, look at the occlusion line in F7.
+6. **Foul.** Pull a ball foul. You should see a grey `FOUL` pill and FOUL BALL.
+7. **Strength contrast.** Compare a jammed or glancing hit with a squared-up one. The weak hit should be quieter, with a small flash, no ring and no impulse. The crushed hit should have a ring, more sparks, the layered crack and a small camera kick.
+8. **Repetition.** Take 20+ hits in a row. The camera should always return, the HUD should never stick, `HitEffects` should stay small in the Explorer, and the next windup should never start before the camera is back.
+9. **Edge cases.**
+   - Reset the character mid-flight: the camera returns to the batter.
+   - Leave the lane: the default camera comes back.
+   - Add latency (Studio network simulation) and watch the F7 `sync corrections` count and recovery when a prediction is rejected.
+   - Repeat at a capped 30 fps and at an uncapped frame rate: the motion should look the same.
+
+### Needs Studio (not verified from the CLI)
+
+- How the camera feels in the real stadium:
+  - profile distances and FOVs;
+  - the occlusion raycast against real stands and fences (including `CanCollide = false` decorative parts, which it looks through);
+  - the return arc clearing tall structures.
+- `CanvasGroup` HUD rendering and its scaling on small screens and mobile, plus font legibility.
+- Halo and trail readability at long range, and how the ring and particles look.
+- Placeholder sound quality and volume balance (replace the assets).
+- Swing gating during the return, and the respawn path (`CharacterAdded` -> camera return).
+- Behaviour under real latency: late `Launch` (an unpredicted hit begins mid-flight), late `Resolved` (the grace period).
+
+### Known issues and tradeoffs
+
+- **Contact label without a prediction.** If the server grants a hit the client did not predict and the swing result arrives before the `Launch`, that hit's card has no CONTACT chip.
+- **Landing effects timing.** Landing effects trigger on the server's `Resolved` message (exact location), so they can lag the visual touchdown by one network latency.
+- **Hit types are not inferred from wall geometry.** The camera does not know about fences ahead, so a deep fly ball into tall stands relies on the occlusion pull-in.
+- **Spectating is out of scope.** Only the local batter's own hits drive the camera; other lanes' balls are just drawn.

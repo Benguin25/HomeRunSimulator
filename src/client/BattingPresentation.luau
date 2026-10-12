@@ -1,8 +1,10 @@
 --!strict
 -- Batting visuals and audio: the bat (built from the exact collision
--- dimensions), the aim reticle, the hit-quality label, sounds, and small
--- impact effects. It holds no gameplay state; BattingController tells it what
--- to show. All animation is driven by elapsed time, never by frame count.
+-- dimensions), the aim reticle, the hit-quality label, swing/miss sounds and
+-- the contact marker. The contact burst, crack sounds and camera impulse are
+-- HitEffects / BattingCamera (Stage 4), scaled by the contact intensity.
+-- It holds no gameplay state; BattingController tells it what to show. All
+-- animation is driven by elapsed time, never by frame count.
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -18,7 +20,7 @@ local BattingConfig = require(Batting.BattingConfig)
 local ContactQuality = require(Batting.ContactQuality)
 local SwingModel = require(Batting.SwingModel)
 
-local BattingCamera = require(script.Parent.BattingCamera)
+local HitEffects = require(script.Parent.HitEffects)
 
 local BattingPresentation = {}
 
@@ -54,7 +56,7 @@ local batCFrames: { CFrame } = {}
 local batModel: Model? = nil
 local effects: { Effect } = {}
 local sounds: { [string]: Sound } = {}
-local kickStart = -math.huge
+local aimVisible = true
 
 local function rgb(values: { number }): Color3
 	return Color3.new(values[1], values[2], values[3])
@@ -191,7 +193,6 @@ function BattingPresentation.start()
 	folder.Parent = Workspace
 	buildGui()
 	sounds.Swing = makeSound("BatSwing", cfg.SwingSoundId, cfg.SwingSoundSpeed, 0.5)
-	sounds.Contact = makeSound("BatContact", cfg.ContactSoundId, cfg.ContactSoundSpeed, 0.9)
 	sounds.Miss = makeSound("BatMiss", cfg.MissSoundId, cfg.MissSoundSpeed, 0.35)
 end
 
@@ -262,7 +263,11 @@ function BattingPresentation.updateReticle(
 	local dims = SwingModel.dimensions(geometry)
 	local world = SwingModel.aimToWorld(geometry, aimX, aimY)
 	local center, visible = toScreen(camera, world)
+	visible = visible and aimVisible
 	reticle.Visible = visible
+	if not visible then
+		cursorDot.Visible = false
+	end
 	if not visible then
 		barrelLine.Visible = false
 		return
@@ -293,7 +298,7 @@ function BattingPresentation.updateReticle(
 end
 
 function BattingPresentation.drawZone(camera: Camera, geometry: LaneGeometry.Geometry)
-	if not cfg.ShowZoneOutline then
+	if not cfg.ShowZoneOutline or not aimVisible then
 		return
 	end
 	local plane = SwingModel.contactPlane(geometry)
@@ -389,56 +394,6 @@ local function addEffect(effect: Effect)
 	table.insert(effects, effect)
 end
 
-local function spawnFlash(position: Vector3, size: number)
-	local flash = newPart("ContactFlash", Enum.PartType.Ball, Vector3.one * size, Color3.new(1, 1, 0.85), Enum.Material.Neon)
-	flash.CFrame = CFrame.new(position)
-	flash.Parent = folder
-	local start = os.clock()
-	addEffect({
-		update = function(now)
-			local f = (now - start) / 0.12
-			if f >= 1 then
-				return false
-			end
-			flash.Size = Vector3.one * size * (1 + f * 2.5)
-			flash.Transparency = 0.2 + 0.8 * f
-			return true
-		end,
-		destroy = function()
-			flash:Destroy()
-		end,
-	})
-end
-
-local function spawnSparks(position: Vector3, normal: Vector3, amount: number)
-	local holder = newPart("Sparks", Enum.PartType.Block, Vector3.one * 0.05, Color3.new(1, 1, 1), Enum.Material.SmoothPlastic)
-	holder.Transparency = 1
-	local side = if math.abs(normal.Y) < 0.95 then Vector3.new(0, 1, 0):Cross(normal).Unit else Vector3.new(1, 0, 0)
-	holder.CFrame = CFrame.fromMatrix(position, side, normal) -- +Y (Top) along the impact normal
-	local emitter = Instance.new("ParticleEmitter")
-	emitter.Rate = 0
-	emitter.EmissionDirection = Enum.NormalId.Top
-	emitter.SpreadAngle = Vector2.new(55, 55)
-	emitter.Speed = NumberRange.new(10, 22)
-	emitter.Lifetime = NumberRange.new(0.15, 0.35)
-	emitter.Drag = 6
-	emitter.LightEmission = 1
-	emitter.Size = NumberSequence.new(0.12, 0)
-	emitter.Color = ColorSequence.new(Color3.fromRGB(255, 240, 180))
-	emitter.Parent = holder
-	holder.Parent = folder
-	emitter:Emit(amount)
-	local start = os.clock()
-	addEffect({
-		update = function(now)
-			return now - start < 0.6
-		end,
-		destroy = function()
-			holder:Destroy()
-		end,
-	})
-end
-
 local function spawnMarker(position: Vector3, size: number)
 	local marker = newPart("ContactMarker", Enum.PartType.Ball, Vector3.one * size, Color3.fromRGB(255, 80, 200), Enum.Material.Neon)
 	marker.CFrame = CFrame.new(position)
@@ -460,22 +415,29 @@ local function spawnMarker(position: Vector3, size: number)
 	})
 end
 
-function BattingPresentation.playContact(contact: ContactQuality.ContactResult, geometry: LaneGeometry.Geometry)
-	local units = geometry.units
-	local strong = contact.label == "Perfect" or contact.label == "Great"
-	local sound = sounds.Contact
-	sound.Volume = 0.5 + 0.5 * contact.score
-	sound.PlaybackSpeed = cfg.ContactSoundSpeed * (0.85 + 0.25 * contact.score)
-	sound:Play()
-	spawnFlash(contact.contactPoint, units.toStuds(0.08 + 0.08 * contact.score))
-	spawnSparks(contact.contactPoint, contact.impactNormal, if strong then 18 else 8)
-	spawnMarker(contact.contactPoint, units.toStuds(0.04))
-	if strong then
-		kickStart = os.clock()
+-- `intensity` (0..1, HitPresentation.intensity) scales the burst and picks the crack.
+function BattingPresentation.playContact(contact: ContactQuality.ContactResult, geometry: LaneGeometry.Geometry, intensity: number, direction: Vector3?)
+	HitEffects.playImpact(contact.contactPoint, contact.impactNormal, direction, intensity)
+	spawnMarker(contact.contactPoint, geometry.units.toStuds(0.04))
+end
+
+-- Hides the aim reticle and zone outline (ball-follow camera); the bat and labels stay.
+function BattingPresentation.setAimVisible(visible: boolean)
+	if aimVisible == visible then
+		return
+	end
+	aimVisible = visible
+	if not visible then
+		reticle.Visible = false
+		barrelLine.Visible = false
+		cursorDot.Visible = false
+		for _, line in zoneLines do
+			line.Visible = false
+		end
 	end
 end
 
--- Per-frame animation of the label, effects and camera kick.
+-- Per-frame animation of the label and effects.
 function BattingPresentation.update()
 	local now = os.clock()
 
@@ -496,16 +458,6 @@ function BattingPresentation.update()
 		if not effect.update(now) then
 			effect.destroy()
 			table.remove(effects, i)
-		end
-	end
-
-	if kickStart > -math.huge then
-		local kick = (now - kickStart) / cfg.CameraKickSeconds
-		if kick < 1 then
-			BattingCamera.setOffset(CFrame.Angles(math.rad(cfg.CameraKickDegrees) * (1 - kick) ^ 2, 0, 0))
-		else
-			BattingCamera.setOffset(CFrame.identity)
-			kickStart = -math.huge
 		end
 	end
 end

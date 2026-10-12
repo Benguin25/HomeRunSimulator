@@ -12,6 +12,10 @@
 --     the server's flight at the current server time;
 --   * the server reports no contact, or nothing arrives in time -> removed.
 -- One flight per lane. Clients never report positions, impacts or distances.
+--
+-- Stage 4: the local batter's own hits are also reported to BattingCamera
+-- (cinematic follow, HUD) and HitEffects (landing feedback). Other lanes'
+-- hits are only drawn.
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -31,7 +35,8 @@ local ImpactModel = require(BattedBallFolder.ImpactModel)
 local LandingDetector = require(BattedBallFolder.LandingDetector)
 
 local BattedBallDebugView = require(script.Parent.BattedBallDebugView)
-local BattingPresentation = require(script.Parent.BattingPresentation)
+local BattingCamera = require(script.Parent.BattingCamera)
+local HitEffects = require(script.Parent.HitEffects)
 local PitchVisualController = require(script.Parent.PitchVisualController)
 
 local BattedBallController = {}
@@ -64,6 +69,11 @@ local effects: { Effect } = {}
 
 local function serverNow(): number
 	return Workspace:GetServerTimeNow()
+end
+
+-- The local batter's own hit on the lane they are batting in.
+local function isOwn(launch: BattedBall.LaunchData): boolean
+	return launch.userId == localPlayer.UserId and launch.laneId == localPlayer:GetAttribute(PitchNet.PlayerLaneAttribute)
 end
 
 local function frameFor(laneId: string): FieldFrame.Frame?
@@ -129,6 +139,8 @@ function BattedBallController.predict(laneId: string, pitchId: number, contact: 
 	entry.impact = impact
 	entry.contactType = BattedBall.describeContact(frame, contact, impact)
 	addEntry(entry)
+	BattingCamera.beginHit({ pitchId = pitchId, flight = entry.flight, endTime = nil, confirmed = false })
+	HitEffects.attachWhoosh(entry.playback.ball and entry.playback.ball.model.PrimaryPart)
 end
 
 -- The server did not grant the predicted contact.
@@ -136,6 +148,7 @@ function BattedBallController.cancelPrediction(laneId: string, pitchId: number)
 	local entry = entries[laneId]
 	if entry and entry.hitId == nil and entry.pitchId == pitchId then
 		removeEntry(laneId)
+		BattingCamera.cancelHit(laneId, pitchId, "prediction rejected")
 	end
 end
 
@@ -200,34 +213,6 @@ local function spawnLandingMarker(entry: Entry, payload: LandingDetector.Outcome
 	addEffect(ring, display.LandingMarkerSeconds)
 end
 
-local function showOutcomeLabel(entry: Entry, payload: LandingDetector.OutcomePayload)
-	if entry.launch.userId ~= localPlayer.UserId then
-		return
-	end
-	local flight = entry.flight
-	local detail = string.format("%d mph  ·  %d° launch", math.floor(flight.exitSpeedMph + 0.5), math.floor(flight.launchAngleDegrees + 0.5))
-	local seconds = BattedBallConfig.Display.ResultLabelSeconds
-	local gold = Color3.fromRGB(255, 214, 64)
-	local grey = Color3.fromRGB(200, 200, 200)
-	if payload.kind == "Landed" then
-		local distance = string.upper(BattedBall.formatDistance(payload.carryMeters or 0))
-		if payload.territory == "Fair" then
-			BattingPresentation.showLabel(distance, gold, detail, seconds)
-		else
-			BattingPresentation.showLabel("FOUL", grey, distance .. "  ·  " .. detail, seconds)
-		end
-	elseif payload.kind == "Obstacle" then
-		BattingPresentation.showLabel(
-			"OFF THE WALL",
-			if payload.territory == "Fair" then gold else grey,
-			string.format("%s  ·  %.1f m up  ·  %s", BattedBall.formatDistance(payload.impactDistanceMeters or 0), payload.impactHeightMeters or 0, detail),
-			seconds
-		)
-	else
-		BattingPresentation.showLabel("OUT OF RANGE", gold, detail, seconds)
-	end
-end
-
 local function onLaunch(packet: any)
 	local launch, endTime = BattedBall.decode(packet)
 	if not launch or not endTime then
@@ -252,9 +237,19 @@ local function onLaunch(packet: any)
 		entry.endTime = endTime
 		entry.playback:setEndTime(endTime)
 		BattedBallDebugView.showFlight(entry)
+		if isOwn(launch) then
+			BattingCamera.confirmHit(launch.laneId, launch.pitchId, endTime)
+		end
 		return
 	end
-	addEntry(newEntry(launch, frame, false, endTime))
+	local fresh = newEntry(launch, frame, false, endTime)
+	addEntry(fresh)
+	if isOwn(launch) then
+		-- Either a corrected prediction (same pitch: the camera swaps flights
+		-- under its smoothing) or a hit this client did not predict.
+		BattingCamera.beginHit({ pitchId = launch.pitchId, flight = fresh.flight, endTime = endTime, confirmed = true })
+		HitEffects.attachWhoosh(fresh.playback.ball and fresh.playback.ball.model.PrimaryPart)
+	end
 end
 
 local function onResolved(hitId: any, laneId: any, payload: any)
@@ -270,7 +265,13 @@ local function onResolved(hitId: any, laneId: any, payload: any)
 	entry.endTime = outcome.endTime
 	entry.playback:setEndTime(outcome.endTime)
 	spawnLandingMarker(entry, outcome)
-	showOutcomeLabel(entry, outcome)
+	if isOwn(entry.launch) then
+		BattingCamera.resolveHit(laneId, entry.pitchId, outcome)
+		local point = outcome.impactPoint
+		if point then
+			HitEffects.playLanding(point, outcome.kind, outcome.surface)
+		end
+	end
 	BattedBallDebugView.showOutcome(entry)
 end
 
@@ -284,6 +285,9 @@ local function onEvent(kind: string, ...: any)
 		local entry = if typeof(laneId) == "string" then entries[laneId] else nil
 		if entry and entry.hitId == hitId then
 			removeEntry(laneId)
+			if isOwn(entry.launch) then
+				BattingCamera.cancelHit(laneId, entry.pitchId, "hit cancelled by server")
+			end
 		end
 	end
 end
@@ -292,10 +296,13 @@ local function onRender()
 	local now = serverNow()
 	local clock = os.clock()
 	local timeout = BattedBallConfig.Lifecycle.PredictionTimeoutSeconds
+	local camera = Workspace.CurrentCamera
+	local cameraPosition = camera and camera.CFrame.Position
 	for laneId, entry in entries do
 		if entry.hitId == nil and clock - entry.createdClock > timeout then
 			removeEntry(laneId) -- the server never confirmed this prediction
-		elseif not entry.playback:update(now) then
+			BattingCamera.cancelHit(laneId, entry.pitchId, "prediction timed out")
+		elseif not entry.playback:update(now, cameraPosition) then
 			entries[laneId] = nil
 		end
 	end

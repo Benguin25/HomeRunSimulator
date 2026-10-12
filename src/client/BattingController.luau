@@ -13,6 +13,9 @@
 -- server runs to predict contact effects on time (including the batted ball,
 -- through BattedBallController). The server's result decides the outcome; a
 -- misprediction is corrected when it arrives.
+--
+-- While the hit camera is away from the batter (Stage 4) the aim HUD is
+-- hidden and clicks are ignored; the camera's return re-enables both.
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -31,8 +34,11 @@ local BatStance = require(Batting.BatStance)
 local ContactQuality = require(Batting.ContactQuality)
 local SwingModel = require(Batting.SwingModel)
 local SwingResolver = require(Batting.SwingResolver)
+local FieldFrame = require(Shared:WaitForChild("BattedBall"):WaitForChild("FieldFrame"))
+local HitPresentation = require(Shared:WaitForChild("Presentation"):WaitForChild("HitPresentation"))
 
 local BattedBallController = require(script.Parent.BattedBallController)
+local BattingCamera = require(script.Parent.BattingCamera)
 local BattingDebugView = require(script.Parent.BattingDebugView)
 local BattingPresentation = require(script.Parent.BattingPresentation)
 local CharacterGrip = require(script.Parent.CharacterGrip)
@@ -118,7 +124,24 @@ local function showContact(entry: Pending, contact: ContactQuality.ContactResult
 		return
 	end
 	entry.contactShown = true
-	BattingPresentation.playContact(contact, geo)
+	-- Intensity from the measured contact, plus the flight once one is known.
+	local hit = BattingCamera.getHit()
+	local flight = if hit and hit.pitchId == entry.pitchId then hit.flight else nil
+	local intensity = HitPresentation.intensity({
+		exitSpeedMph = flight and flight.exitSpeedMph,
+		launchDegrees = flight and flight.launchAngleDegrees,
+		score = contact.score,
+		relativeSpeedMps = geo.units.toMeters(contact.relativeVelocity.Magnitude),
+		sweetSpotOffsetMeters = geo.units.toMeters(contact.sweetSpotOffset),
+	})
+	local direction: Vector3? = nil
+	if flight then
+		local v = flight.launch.velocity
+		local world = FieldFrame.vectorToWorld(flight.frame, v.X, v.Y, v.Z)
+		direction = if world.Magnitude > 1e-6 then world.Unit else nil
+	end
+	BattingPresentation.playContact(contact, geo, intensity, direction)
+	BattingCamera.addImpulse(intensity)
 end
 
 local function updatePending(now: number)
@@ -164,7 +187,11 @@ local function onRender(dt: number)
 		return
 	end
 	local now = serverNow()
-	updateAim(dt)
+	local aimVisible = BattingCamera.isAimVisible()
+	BattingPresentation.setAimVisible(aimVisible)
+	if aimVisible then
+		updateAim(dt)
+	end
 
 	-- The resting bat lives in the character's hands and drifts toward the aim.
 	-- The body follows the swing pivot (the swing's own while swinging, so it
@@ -198,7 +225,7 @@ end
 local function trySwing()
 	local geo = geometry
 	local lane = laneId
-	if not active or not geo or not lane or not aimInitialized then
+	if not active or not geo or not lane or not aimInitialized or not BattingCamera.isBattingView() then
 		return
 	end
 	local now = serverNow()
@@ -237,6 +264,7 @@ local function trySwing()
 		if resolution.contact then
 			PitchVisualController.cutPitch(lane, flight.data.id, resolution.contact.contactTime)
 			BattedBallController.predict(lane, flight.data.id, resolution.contact)
+			BattingCamera.setContactLabel(lane, flight.data.id, resolution.contact.label)
 		end
 	end
 	BattingDebugView.drawSwing(geo, swing, entry.predicted)
@@ -261,6 +289,9 @@ local function onSwingResult(payload: BattingNet.SwingResultPayload)
 	local serverContact = payload.contact
 	local predicted = entry.contact
 
+	if serverContact and payload.pitchId then
+		BattingCamera.setContactLabel(entry.laneId, payload.pitchId, serverContact.label)
+	end
 	if serverContact then
 		if not entry.contactShown then
 			-- Not shown yet: show the authoritative contact at its own time.

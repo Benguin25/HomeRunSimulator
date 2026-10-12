@@ -215,12 +215,10 @@ BattingConfig.Presentation = {
 	-- Placeholder sounds from Studio's built-in content. Swap for real assets.
 	SwingSoundId = "rbxasset://sounds/action_jump.mp3",
 	SwingSoundSpeed = 1.5,
-	ContactSoundId = "rbxasset://sounds/action_jump_land.mp3",
-	ContactSoundSpeed = 1.9,
+	-- (Contact sounds, the impact burst and the camera impulse moved to
+	-- Presentation/PresentationConfig in Stage 4: Sounds, Impact, Shake.)
 	MissSoundId = "rbxasset://sounds/action_jump.mp3",
 	MissSoundSpeed = 0.75,
-	CameraKickDegrees = 0.35, -- Great/Perfect only; decays in CameraKickSeconds
-	CameraKickSeconds = 0.12,
 	ContactMarkerSeconds = 1.5,
 	-- (The Phase 2 TemporaryDeflection stand-in was replaced by the Phase 3A
 	-- batted-ball flight: see BattedBall/BattedBallConfig.)

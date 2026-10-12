@@ -121,8 +121,11 @@ BattedBallConfig.FoulLines = {
 
 -- Hit lifecycle (HitLifecycle / BattedBallServer).
 BattedBallConfig.Lifecycle = {
-	-- After the first impact the lane holds this long before the next pitch can start.
-	ResultHoldSeconds = 1.5,
+	-- After the first impact the lane holds this long before the next pitch can
+	-- start. Covers the client's landing hold + camera return
+	-- (PresentationConfig.Timing: 1.3 + 0.85 s) plus a margin, so the next
+	-- windup never begins while the camera is still away (a test enforces it).
+	ResultHoldSeconds = 2.4,
 	-- A client-predicted flight the server never confirms is removed after this.
 	PredictionTimeoutSeconds = 1.25,
 }
@@ -132,9 +135,9 @@ BattedBallConfig.Display = {
 	-- Visual spin: real spin (2000+ rpm) reads as a blur, so it is slowed down.
 	VisualSpinScale = 0.05,
 	TrailLifetime = 0.35,
-	LandedHoldSeconds = 1.2,
+	LandedHoldSeconds = 1.6, -- >= the camera's landing hold, so the ball stays on screen
 	LandedFadeSeconds = 0.4,
-	ResultLabelSeconds = 2.5, -- distance headline for the batter's own hits
+	-- (The batter's result headline became the Stage 4 result card: Presentation/HitPresentation.)
 	ShowLandingMarker = true,
 	LandingMarkerSeconds = 4,
 	LandingMarkerDiameterMeters = 1.2,
