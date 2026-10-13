@@ -247,7 +247,7 @@ PitchConfig.Debug = {
 	TrajectoryDotEverySteps = 4,
 	KeepTrajectories = 3,
 	LogPitchesToOutput = true,
-	RunTestsOnStart = true, -- run the pure-Luau tests once when a Studio server starts
+	RunTestsOnStart = false, -- opt in explicitly; normal Studio starts should launch gameplay immediately
 }
 
 return PitchConfig

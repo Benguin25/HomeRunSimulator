@@ -12,6 +12,11 @@ task.spawn(function()
 		local Players = game:GetService("Players")
 		local Shared = game:GetService("ReplicatedStorage"):WaitForChild("Shared")
 		local server = game:GetService("ServerScriptService"):WaitForChild("Server")
+		local persistence = require(server.Persistence.PersistenceConfig)
+		assert(
+			persistence.StudioMode == "Mock" and persistence.StudioMockScenario == "New",
+			"Stage6B fixture requires Mock/New; never seed DataStore profiles"
+		)
 		local Ball = require(Shared.BattedBall.BattedBall)
 		local Field = require(Shared.BattedBall.FieldFrame)
 		local Landing = require(Shared.BattedBall.LandingDetector)
@@ -30,6 +35,7 @@ task.spawn(function()
 		assert(#Players:GetPlayers() == 3, "three clients connected")
 		local rookie, others = nil, {}
 		for _, p in Players:GetPlayers() do
+			assert(p:GetAttribute("ProfileMock") == true, "fixture must use mock profiles")
 			if p:GetAttribute("PitchLaneId") then
 				rookie = p
 			else

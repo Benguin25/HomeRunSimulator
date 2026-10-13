@@ -11,6 +11,11 @@ task.spawn(function()
 		local Players = game:GetService("Players")
 		local Shared = game:GetService("ReplicatedStorage"):WaitForChild("Shared")
 		local server = game:GetService("ServerScriptService"):WaitForChild("Server")
+		local persistence = require(server.Persistence.PersistenceConfig)
+		assert(
+			persistence.StudioMode == "Mock" and persistence.StudioMockScenario == "New",
+			"Stage7A fixture requires Mock/New; never seed DataStore profiles"
+		)
 		local Batter = require(server.BatterService)
 		local Pitch = require(server.PitchServer)
 		local Gameplay = require(server.GameplayServer)
@@ -58,6 +63,7 @@ task.spawn(function()
 		end)
 		local power, sky, home = clients[1], clients[2], clients[3]
 		for _, p in clients do
+			assert(p:GetAttribute("ProfileMock") == true, "fixture must use mock profiles")
 			assert(
 				p:GetAttribute("BattingMode") == "FreeRoam" and not p:GetAttribute("PitchLaneId"),
 				"free roam initialization"

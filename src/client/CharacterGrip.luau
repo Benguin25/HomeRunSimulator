@@ -44,6 +44,7 @@ local SwingModel = require(Shared.Batting.SwingModel)
 local CharacterGrip = {}
 
 local LOG = "[Batting]"
+local debugLogging = RunService:IsStudio()
 -- Hands farther than this from where the Transforms put them mean the pose
 -- is not reaching the screen.
 local RENDER_TOLERANCE_METERS = 0.03
@@ -128,7 +129,7 @@ local function onPreSimulation()
 			live.Transform = transform
 		end
 	end
-	if s.overwrites > 0 and not s.overwriteWarned then
+	if debugLogging and s.overwrites > 0 and not s.overwriteWarned then
 		s.overwriteWarned = true
 		warn(`{LOG} Something (usually an Animator track) is overwriting the batting pose's Motor6D Transforms; re-applying them in PreSimulation.`)
 	end
@@ -224,17 +225,19 @@ function CharacterGrip.bind(character: Model?): boolean
 	state = s
 	status = "bound"
 	lastLoggedReason = nil
-	local extras = {}
-	if binding.note then
-		table.insert(extras, binding.note)
+	if debugLogging then
+		local extras = {}
+		if binding.note then
+			table.insert(extras, binding.note)
+		end
+		if #binding.missingOptional > 0 then
+			table.insert(extras, `optional joints missing: {table.concat(binding.missingOptional, ", ")}`)
+		end
+		print(
+			`{LOG} Character rig bound: {binding.kind} (Humanoid.RigType = {binding.reportedRigType}), {CharacterGrip.jointSummary(binding)}{if next(s.kinematicRestore) then " (made kinematic while batting)" else ""}, driving {#s.roles} joints: {table.concat(s.roles, ", ")}`
+				.. (if #extras > 0 then ` | {table.concat(extras, " | ")}` else "")
+		)
 	end
-	if #binding.missingOptional > 0 then
-		table.insert(extras, `optional joints missing: {table.concat(binding.missingOptional, ", ")}`)
-	end
-	print(
-		`{LOG} Character rig bound: {binding.kind} (Humanoid.RigType = {binding.reportedRigType}), {CharacterGrip.jointSummary(binding)}{if next(s.kinematicRestore) then " (made kinematic while batting)" else ""}, driving {#s.roles} joints: {table.concat(s.roles, ", ")}`
-			.. (if #extras > 0 then ` | {table.concat(extras, " | ")}` else "")
-	)
 	return true
 end
 
@@ -249,7 +252,9 @@ function CharacterGrip.ensureBound(character: Model?)
 			s.rig = CharacterPose.read(s.binding)
 			return
 		end
-		print(`{LOG} Character rig binding went stale ({stale}); rebinding`)
+		if debugLogging then
+			print(`{LOG} Character rig binding went stale ({stale}); rebinding`)
+		end
 		CharacterGrip.bind(character)
 		return
 	end

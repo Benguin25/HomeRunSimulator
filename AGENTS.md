@@ -2,6 +2,15 @@
 
 Build a satisfying arcade batting loop grounded in deterministic physics. Stages 1-5, Stage 6A economy/Power, Stage 6A.1 skip/preview and Stage 6B stadium progression are implemented. Stage 6C adds rebirths and permanent server-owned progression; session counters remain separate. Stage 7A adds free roam, explicit handed box entry/exit, shared menu input and procedural pitcher/audio presentation. The implementation is the source of truth when older documentation disagrees.
 
+## MVP release contract
+
+- The initial roadmap is complete enough for developer playtesting. The October 12, 2026 audit status is **NOT READY for public release**: live DataStore validation remains blocked by disabled Studio API access. See `MVP_RELEASE_CHECKLIST.md` for current evidence and release gates; historical stage results are not fresh release certification.
+- MVP controls target **desktop mouse/keyboard only**. Touch/gamepad prompts do not establish usable batting controls. Require Computer-only playable devices before release; mobile, console and VR remain unsupported until implemented and tested.
+- Keep `PitchConfig.Debug.RunTestsOnStart = false` for normal Studio startup. Invoke the existing runner explicitly during verification. F6/F7 remain hidden by default, published debug stays disabled, and routine character-grip diagnostics are Studio-only.
+- Both multiplayer fixtures must enforce Mock/New before seeded progression and verify `ProfileMock`; never install them in a published place. Stage 6B remains historical and incompatible with current free-roam assignment. Remove temporary fixtures/status attributes and restore mock configuration/intervals after tests.
+- Preserve current balance and the authored place. Pitcher, stadium, audio, animation and UI redesigns belong in the prioritized post-MVP backlog. No new progression/content systems, monetization or pets in release-readiness work.
+- Real persistence signoff requires disposable DEV data in an isolated development experience, fresh-server save/load, lease contention and shutdown/recovery checks. Never bypass API security, test real player profiles, call mock verification live verification, or publish/change live settings without explicit authorization.
+
 ## Architecture and constraints
 
 - Rojo maps `src/shared`, `src/server`, and `src/client`. Preserve `default.project.json` and Studio-managed `Workspace.Stadium` assets unless the task requires a change.
