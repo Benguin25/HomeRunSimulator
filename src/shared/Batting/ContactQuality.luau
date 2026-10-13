@@ -104,7 +104,12 @@ function ContactQuality.evaluate(
 
 	local sweetSpotOffset = hit.alongBat - swing.dims.sweetSpot
 	local offset = hit.ballCenter - hit.axisPoint
-	local verticalOffset = offset:Dot(pose.planeNormal)
+	-- The swing axis points up for a right-handed batter and down for a
+	-- left-handed one; measure along the upward side of the swing plane so
+	-- "+ = ball above the bat" holds for both hands. Only the magnitude feeds
+	-- the quality score.
+	local planeUp = if pose.planeNormal:Dot(geometry.up) < 0 then -pose.planeNormal else pose.planeNormal
+	local verticalOffset = offset:Dot(planeUp)
 
 	local timingError = if idealContactTime then swing.squareTime - idealContactTime else nil
 

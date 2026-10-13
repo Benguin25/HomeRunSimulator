@@ -30,8 +30,14 @@ PitchConfig.Ball = {
 	Color = { 0.97, 0.96, 0.93 },
 	SeamColor = { 0.78, 0.12, 0.12 },
 	TrailLifetime = 0.09,
-	-- Optional texture for the ball. Leave empty to use the built-in seam bands.
+	-- Optional texture for the ball. Leave empty to use the built-in seam.
 	TextureId = "",
+	SeamSegments = 28, -- figure-eight seam drawn from this many short segments
+	SeamShape = 0.28, -- lobe shape of the seam curve (0..0.5)
+	-- Soft shadow under the ball while it approaches (depth cue). Presentation only.
+	ShadowEnabled = true,
+	ShadowMaxOpacity = 0.45,
+	ShadowStartFraction = 0.3, -- fades in from this fraction of the distance to the plate
 }
 
 -- Physics integration. The trajectory is integrated with RK4 at this fixed

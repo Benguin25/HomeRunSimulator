@@ -1,0 +1,270 @@
+--!strict
+-- Authored keyframes for the pitcher's full delivery (data only).
+--
+-- Keys use `u` = fraction of the windup (windup start 0 -> release 1, so the
+-- whole delivery stretches with each difficulty tier's windup length) or
+-- `s` = seconds after release (follow-through and the walk back to the
+-- rubber). u = 1 is the authoritative release; the hand there is aligned to
+-- the actual release point at runtime (PitcherMotion).
+--
+-- Frames (meters / degrees), all mirror-aware for a left-handed pitcher:
+--   mound  : x = toward the throwing-arm side, y = up, z = toward home plate,
+--            origin at the pitcher marker (rubber) on the ground.
+--   chest  : x = arm side, y = up, z = the chest's facing, origin at the
+--            UpperTorso center.
+-- Yaw turns the body toward the arm side (90 = closed: glove shoulder points
+-- at the plate). Pitch tilts the top forward, roll tilts toward the glove side.
+--
+-- Phases: set -> rocker step -> pivot -> leg lift (balance point, u~0.48)
+-- -> hands break & stride -> foot strike (u~0.86, hips open, shoulders
+-- still closed) -> layback -> release -> deceleration across the body ->
+-- back leg swings through to a fielding position -> walk back -> set.
+
+local V = Vector3.new
+
+type Key = { u: number?, s: number?, v: any }
+
+local tracks: { [string]: { Key } } = {
+	-- LowerTorso center offset: x, y (relative to standing height), z.
+	pelvis = {
+		{ u = 0, v = V(0, -0.05, -0.05) },
+		{ u = 0.12, v = V(0.02, -0.05, -0.12) },
+		{ u = 0.24, v = V(0.03, -0.04, -0.06) },
+		{ u = 0.36, v = V(0.02, -0.03, -0.03) },
+		{ u = 0.48, v = V(0.01, -0.04, -0.02) },
+		{ u = 0.58, v = V(0, -0.09, 0.1) },
+		{ u = 0.7, v = V(-0.01, -0.17, 0.32) },
+		{ u = 0.8, v = V(-0.02, -0.22, 0.52) },
+		{ u = 0.86, v = V(-0.03, -0.24, 0.62) },
+		{ u = 0.93, v = V(-0.04, -0.18, 0.8) },
+		{ u = 1, v = V(-0.05, -0.14, 0.98) },
+		{ s = 0.12, v = V(-0.07, -0.18, 0.98) },
+		{ s = 0.3, v = V(-0.06, -0.28, 1.02) },
+		{ s = 0.5, v = V(0.05, -0.24, 1) },
+		{ s = 0.9, v = V(0.05, -0.12, 0.98) },
+		{ s = 1.3, v = V(0, -0.06, 0.78) },
+		{ s = 1.6, v = V(0.02, -0.05, 0.5) },
+		{ s = 1.95, v = V(0, -0.05, 0.2) },
+		{ s = 2.2, v = V(0, -0.05, -0.05) },
+	},
+	pelvisYaw = {
+		{ u = 0, v = 0 },
+		{ u = 0.12, v = 6 },
+		{ u = 0.24, v = 62 },
+		{ u = 0.36, v = 94 },
+		{ u = 0.48, v = 100 },
+		{ u = 0.58, v = 98 },
+		{ u = 0.7, v = 92 },
+		{ u = 0.8, v = 70 },
+		{ u = 0.86, v = 40 },
+		{ u = 0.93, v = 6 },
+		{ u = 1, v = -5 },
+		{ s = 0.12, v = -30 },
+		{ s = 0.3, v = -45 },
+		{ s = 0.5, v = -5 },
+		{ s = 0.9, v = 0 },
+	},
+	pelvisPitch = {
+		{ u = 0, v = 6 },
+		{ u = 0.24, v = 2 },
+		{ u = 0.48, v = -2 },
+		{ u = 0.7, v = 0 },
+		{ u = 0.86, v = 4 },
+		{ u = 0.93, v = 10 },
+		{ u = 1, v = 14 },
+		{ s = 0.12, v = 28 },
+		{ s = 0.3, v = 30 },
+		{ s = 0.5, v = 18 },
+		{ s = 0.9, v = 8 },
+		{ s = 1.3, v = 4 },
+		{ s = 2.2, v = 6 },
+	},
+	pelvisRoll = {
+		{ u = 0, v = 0 },
+		{ u = 0.48, v = -3 },
+		{ u = 0.7, v = -10 },
+		{ u = 0.86, v = -4 },
+		{ u = 1, v = 4 },
+		{ s = 0.3, v = 4 },
+		{ s = 0.5, v = 0 },
+	},
+	-- UpperTorso relative to the pelvis (hip-shoulder separation, flexion, tilt).
+	chestYaw = {
+		{ u = 0, v = 0 },
+		{ u = 0.24, v = 8 },
+		{ u = 0.48, v = 12 },
+		{ u = 0.7, v = 15 },
+		{ u = 0.8, v = 30 },
+		{ u = 0.86, v = 50 },
+		{ u = 0.93, v = 25 },
+		{ u = 1, v = 0 },
+		{ s = 0.12, v = -20 },
+		{ s = 0.3, v = -20 },
+		{ s = 0.5, v = 0 },
+	},
+	chestPitch = {
+		{ u = 0, v = 4 },
+		{ u = 0.36, v = 0 },
+		{ u = 0.48, v = -4 },
+		{ u = 0.7, v = -4 },
+		{ u = 0.86, v = 0 },
+		{ u = 0.93, v = 8 },
+		{ u = 1, v = 16 },
+		{ s = 0.12, v = 30 },
+		{ s = 0.3, v = 32 },
+		{ s = 0.5, v = 12 },
+		{ s = 0.9, v = 4 },
+	},
+	chestRoll = {
+		{ u = 0, v = 0 },
+		{ u = 0.7, v = -6 },
+		{ u = 0.86, v = 0 },
+		{ u = 0.93, v = 6 },
+		{ u = 1, v = 8 },
+		{ s = 0.12, v = 6 },
+		{ s = 0.3, v = 0 },
+	},
+	-- Throwing hand (the ball) in the chest frame, and the elbow's bend direction.
+	throwHand = {
+		{ u = 0, v = V(0.06, -0.22, 0.3) },
+		{ u = 0.12, v = V(0.03, 0.02, 0.3) },
+		{ u = 0.36, v = V(0.03, 0.06, 0.28) },
+		{ u = 0.48, v = V(0.04, 0.05, 0.27) },
+		{ u = 0.58, v = V(0.22, -0.25, 0.12) },
+		{ u = 0.7, v = V(0.5, -0.12, -0.12) },
+		{ u = 0.8, v = V(0.52, 0.2, 0) },
+		{ u = 0.86, v = V(0.42, 0.4, 0.1) },
+		{ u = 0.93, v = V(0.4, 0.45, -0.25) },
+		{ u = 0.97, v = V(0.56, 0.58, 0) },
+		{ u = 1, v = V(0.64, 0.58, 0.25) },
+		{ s = 0.06, v = V(0.18, 0.15, 0.6) },
+		{ s = 0.12, v = V(-0.05, -0.3, 0.45) },
+		{ s = 0.3, v = V(-0.25, -0.55, 0.2) },
+		{ s = 0.5, v = V(0.15, -0.1, 0.4) },
+		{ s = 0.9, v = V(0.12, -0.15, 0.35) },
+		{ s = 2.2, v = V(0.06, -0.22, 0.3) },
+	},
+	throwPole = {
+		{ u = 0, v = V(1, -1, 0) },
+		{ u = 0.58, v = V(0.6, -1, -0.3) },
+		{ u = 0.7, v = V(0.3, -1, -0.3) },
+		{ u = 0.8, v = V(1, -0.2, -0.3) },
+		{ u = 0.86, v = V(1, -0.1, 0.2) },
+		{ u = 0.93, v = V(1, 0, 0.6) },
+		{ u = 1, v = V(1, -0.6, 0.2) },
+		{ s = 0.12, v = V(0.3, -1, 0.3) },
+		{ s = 0.3, v = V(0, -1, 0.5) },
+		{ s = 0.5, v = V(0.8, -1, 0) },
+		{ s = 2.2, v = V(1, -1, 0) },
+	},
+	gloveHand = {
+		{ u = 0, v = V(-0.02, -0.18, 0.32) },
+		{ u = 0.12, v = V(-0.02, 0.06, 0.32) },
+		{ u = 0.48, v = V(-0.02, 0.08, 0.3) },
+		{ u = 0.58, v = V(-0.25, 0, 0.3) },
+		{ u = 0.7, v = V(-0.5, 0.15, 0.2) },
+		{ u = 0.8, v = V(-0.52, 0.2, 0.22) },
+		{ u = 0.86, v = V(-0.45, 0.15, 0.3) },
+		{ u = 0.93, v = V(-0.3, 0.05, 0.35) },
+		{ u = 1, v = V(-0.18, -0.02, 0.28) },
+		{ s = 0.12, v = V(-0.2, -0.05, 0.25) },
+		{ s = 0.3, v = V(-0.22, -0.1, 0.2) },
+		{ s = 0.5, v = V(-0.15, 0, 0.45) },
+		{ s = 0.9, v = V(-0.12, -0.08, 0.38) },
+		{ s = 2.2, v = V(-0.02, -0.18, 0.32) },
+	},
+	glovePole = {
+		{ u = 0, v = V(-1, -1, 0) },
+		{ u = 0.7, v = V(-0.5, -1, -0.3) },
+		{ u = 0.93, v = V(-1, -0.5, -0.5) },
+		{ s = 0.5, v = V(-1, -1, 0) },
+	},
+	-- Feet in the mound frame: y = lift of the ankle above its flat-foot height.
+	leadFoot = {
+		{ u = 0, v = V(-0.16, 0, -0.08) },
+		{ u = 0.06, v = V(-0.16, 0, -0.08) },
+		{ u = 0.12, v = V(-0.14, 0.03, -0.2) },
+		{ u = 0.18, v = V(-0.12, 0, -0.26) },
+		{ u = 0.24, v = V(-0.12, 0, -0.26) },
+		{ u = 0.36, v = V(0.05, 0.22, -0.05) },
+		{ u = 0.48, v = V(0.28, 0.42, 0) },
+		{ u = 0.58, v = V(0.15, 0.3, 0.38) },
+		{ u = 0.7, v = V(0, 0.18, 0.78) },
+		{ u = 0.8, v = V(-0.08, 0.06, 1.08) },
+		{ u = 0.86, v = V(-0.1, 0, 1.2) },
+		{ s = 0.95, v = V(-0.1, 0, 1.2) },
+		{ s = 1.12, v = V(-0.12, 0.12, 0.9) },
+		{ s = 1.3, v = V(-0.14, 0, 0.55) },
+		{ s = 1.62, v = V(-0.14, 0, 0.55) },
+		{ s = 1.78, v = V(-0.15, 0.08, 0.22) },
+		{ s = 1.95, v = V(-0.16, 0, -0.08) },
+	},
+	leadYaw = {
+		{ u = 0, v = -8 },
+		{ u = 0.24, v = -8 },
+		{ u = 0.36, v = 60 },
+		{ u = 0.48, v = 85 },
+		{ u = 0.7, v = 70 },
+		{ u = 0.8, v = 30 },
+		{ u = 0.86, v = 20 },
+		{ s = 0.95, v = 15 },
+		{ s = 1.3, v = 0 },
+		{ s = 1.95, v = -8 },
+	},
+	leadPitch = {
+		{ u = 0, v = 0 },
+		{ u = 0.24, v = 0 },
+		{ u = 0.36, v = 25 },
+		{ u = 0.48, v = 35 },
+		{ u = 0.7, v = 10 },
+		{ u = 0.8, v = -12 },
+		{ u = 0.86, v = 0 },
+	},
+	trailFoot = {
+		{ u = 0, v = V(0.14, 0, 0) },
+		{ u = 0.12, v = V(0.14, 0, 0) },
+		{ u = 0.19, v = V(0.1, 0.04, 0.05) },
+		{ u = 0.24, v = V(0.06, 0, 0.08) },
+		{ u = 0.86, v = V(0.06, 0, 0.08) },
+		{ u = 0.93, v = V(0.07, 0, 0.25) },
+		{ u = 1, v = V(0.08, 0, 0.42) },
+		{ s = 0.12, v = V(0.15, 0.12, 0.6) },
+		{ s = 0.3, v = V(0.32, 0.2, 0.88) },
+		{ s = 0.5, v = V(0.36, 0, 1.05) },
+		{ s = 1.3, v = V(0.36, 0, 1.05) },
+		{ s = 1.45, v = V(0.25, 0.12, 0.72) },
+		{ s = 1.62, v = V(0.14, 0, 0.38) },
+		{ s = 1.95, v = V(0.14, 0, 0.38) },
+		{ s = 2.08, v = V(0.14, 0.06, 0.18) },
+		{ s = 2.2, v = V(0.14, 0, 0) },
+	},
+	trailYaw = {
+		{ u = 0, v = 0 },
+		{ u = 0.19, v = 45 },
+		{ u = 0.24, v = 90 },
+		{ u = 0.86, v = 90 },
+		{ u = 0.93, v = 75 },
+		{ u = 1, v = 50 },
+		{ s = 0.3, v = 0 },
+	},
+	trailPitch = {
+		{ u = 0, v = 0 },
+		{ u = 0.82, v = 0 },
+		{ u = 0.9, v = 30 },
+		{ u = 1, v = 60 },
+		{ s = 0.12, v = 40 },
+		{ s = 0.3, v = 10 },
+		{ s = 0.5, v = 0 },
+	},
+	-- How strongly the head tracks the catcher (eyes on target, except the
+	-- violent follow-through).
+	look = {
+		{ u = 0, v = 1 },
+		{ u = 0.97, v = 1 },
+		{ s = 0.12, v = 0.5 },
+		{ s = 0.3, v = 0.6 },
+		{ s = 0.5, v = 1 },
+	},
+}
+
+return tracks

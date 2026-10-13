@@ -37,6 +37,9 @@ export type SwingResultPayload = {
 	missReason: SwingResolver.MissReason?,
 	missAmount: number?, -- seconds for Early/Late, studs for the other reasons
 	timingErrorSeconds: number?,
+	-- Ball's contact-plane crossing (lane-local studs, aim axes) for swing feedback.
+	ballX: number?,
+	ballY: number?,
 	minGap: number?,
 }
 

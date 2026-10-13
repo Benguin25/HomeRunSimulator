@@ -29,12 +29,14 @@ function Build.ground(
 	z0: number,
 	z1: number,
 	y: number,
-	color: Color3
+	color: Color3,
+	tileStuds: number?
 )
 	if x1 <= x0 or z1 <= z0 then
 		return
 	end
-	local nx, nz = math.ceil((x1 - x0) / Config.TileStuds), math.ceil((z1 - z0) / Config.TileStuds)
+	local tile = tileStuds or Config.TileStuds
+	local nx, nz = math.ceil((x1 - x0) / tile), math.ceil((z1 - z0) / tile)
 	local dx, dz = (x1 - x0) / nx, (z1 - z0) / nz
 	for ix = 1, nx do
 		for iz = 1, nz do

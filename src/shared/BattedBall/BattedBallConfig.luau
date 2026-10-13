@@ -52,6 +52,11 @@ BattedBallConfig.ArcadeContact = {
 	Enabled = true,
 	CenterSlope = 0.65, -- 1 = original sensitivity; lower = flatter impact surface
 	ShoulderStart = 0.45, -- |normal dot swing-plane up| where edge recovery begins
+	-- Arcade lift: tilts the virtual impact surface up so dead-center contact
+	-- launches near the best home-run angle instead of a low line drive
+	-- (physically you would need to hit ~4 cm under the ball). 0 = Stage 5A;
+	-- 17 puts the best carry at dead center (measured with the balance sweep).
+	LiftDegrees = 17,
 }
 
 -- Power knobs for future progression. Defaults are the beginner tier.
@@ -79,7 +84,7 @@ BattedBallConfig.Power = {
 BattedBallConfig.OriginalBalance = {
 	Impact = BattedBallConfig.Impact,
 	Power = table.clone(BattedBallConfig.Power),
-	ArcadeContact = { Enabled = false, CenterSlope = 1, ShoulderStart = 0.60 },
+	ArcadeContact = { Enabled = false, CenterSlope = 1, ShoulderStart = 0.60, LiftDegrees = 0 },
 }
 BattedBallConfig.OriginalBalance.Power.BatSpeedMultiplier = 1.2
 

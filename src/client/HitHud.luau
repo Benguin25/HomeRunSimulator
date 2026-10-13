@@ -1,6 +1,6 @@
 --!strict
--- Hit HUD: the live distance counter during the flight and the result card
--- at the landing. Reads the presented hit from BattingCamera's director each
+-- Hit HUD: the live distance counter during the flight (the landing result
+-- is shown by the Swing Analysis panel, SwingAnalysisHud). Reads the presented hit from BattingCamera's director each
 -- frame; every number comes from HitPresentation (live = the flight's
 -- horizontal distance from home plate, final = the server's outcome).
 -- Also writes the camera / presentation section of the F7 debug overlay.
@@ -51,18 +51,9 @@ local counterUnit: TextLabel
 local counterScale: UIScale
 local pill: Frame
 local pillText: TextLabel
-local card: CanvasGroup
-local cardHeadline: TextLabel
-local cardNote: TextLabel
-local cardDistanceLabel: TextLabel
-local cardDistanceValue: TextLabel
-local cardStats: Frame
-local statLabels: { { label: TextLabel, value: TextLabel, frame: Frame } } = {}
 
 local counterAlpha = 0
-local cardAlpha = 0
-local cardShownFor: any = nil -- the hit whose card is built
-local cardShownAt = -math.huge
+local resultPlayedFor: any = nil -- the hit whose landing result cue has played
 local lastCounterKind = "Hidden"
 local punchAt = -math.huge
 local displayedMeters: number? = nil
@@ -159,93 +150,6 @@ local function buildCounter()
 	counterUnit.AutomaticSize = Enum.AutomaticSize.X
 	counterUnit.Size = UDim2.fromOffset(0, 48)
 	counterUnit.LayoutOrder = 2
-end
-
-local function buildCard()
-	card = panel("ResultCard", UDim2.fromOffset(440, 196), Vector2.new(0.5, 1), UDim2.new(0.5, 0, 1, -40))
-
-	cardHeadline = label(card, "Headline", Enum.Font.GothamBlack, 26, COLORS.gold)
-	cardHeadline.Position = UDim2.fromOffset(0, 14)
-	cardHeadline.Size = UDim2.new(1, 0, 0, 28)
-
-	cardNote = label(card, "Note", Enum.Font.GothamMedium, 13, COLORS.muted)
-	cardNote.Position = UDim2.fromOffset(0, 42)
-	cardNote.Size = UDim2.new(1, 0, 0, 16)
-
-	cardDistanceLabel = label(card, "DistanceLabel", Enum.Font.GothamBold, 12, COLORS.muted)
-	cardDistanceLabel.Position = UDim2.fromOffset(0, 64)
-	cardDistanceLabel.Size = UDim2.new(1, 0, 0, 14)
-
-	cardDistanceValue = label(card, "DistanceValue", Enum.Font.GothamBlack, 44, COLORS.text)
-	cardDistanceValue.Position = UDim2.fromOffset(0, 78)
-	cardDistanceValue.Size = UDim2.new(1, 0, 0, 46)
-	cardDistanceValue.RichText = true
-
-	cardStats = Instance.new("Frame")
-	cardStats.Name = "Stats"
-	cardStats.BackgroundTransparency = 1
-	cardStats.AnchorPoint = Vector2.new(0.5, 1)
-	cardStats.Position = UDim2.new(0.5, 0, 1, -14)
-	cardStats.Size = UDim2.new(1, -28, 0, 50)
-	cardStats.Parent = card
-	local layout = Instance.new("UIListLayout")
-	layout.FillDirection = Enum.FillDirection.Horizontal
-	layout.HorizontalAlignment = Enum.HorizontalAlignment.Center
-	layout.Padding = UDim.new(0, 8)
-	layout.Parent = cardStats
-
-	for i = 1, 3 do
-		local chip = Instance.new("Frame")
-		chip.Name = `Stat{i}`
-		chip.LayoutOrder = i
-		chip.Size = UDim2.new(1 / 3, -6, 1, 0)
-		chip.BackgroundColor3 = Color3.new(1, 1, 1)
-		chip.BackgroundTransparency = 0.93
-		chip.BorderSizePixel = 0
-		corner(chip, 10)
-		chip.Parent = cardStats
-		local caption = label(chip, "Label", Enum.Font.GothamBold, 11, COLORS.muted)
-		caption.Position = UDim2.fromOffset(0, 7)
-		caption.Size = UDim2.new(1, 0, 0, 13)
-		local value = label(chip, "Value", Enum.Font.GothamBlack, 19, COLORS.text)
-		value.Position = UDim2.fromOffset(0, 21)
-		value.Size = UDim2.new(1, 0, 0, 22)
-		statLabels[i] = { label = caption, value = value, frame = chip }
-	end
-end
-
-local function toneColor(tone: string): Color3
-	if tone == "Fair" then
-		return COLORS.gold
-	elseif tone == "Foul" then
-		return COLORS.foul
-	end
-	return COLORS.neutral
-end
-
-local function fillCard(summary: HitPresentation.Summary)
-	cardHeadline.Text = summary.headline
-	cardHeadline.TextColor3 = toneColor(summary.tone)
-	cardNote.Text = summary.note or ""
-	if summary.distanceValue then
-		cardDistanceLabel.Text = summary.distanceLabel or ""
-		cardDistanceValue.Text = `{summary.distanceValue}<font size="22" color="#AAB2C4"> {summary.distanceUnit or ""}</font>`
-	else
-		cardDistanceLabel.Text = ""
-		cardDistanceValue.Text = ""
-	end
-	for i, slot in statLabels do
-		local row = summary.rows[i]
-		slot.frame.Visible = row ~= nil
-		if row then
-			slot.label.Text = row.label
-			slot.value.Text = row.value
-		end
-	end
-	local count = #summary.rows
-	for _, slot in statLabels do
-		slot.frame.Size = UDim2.new(1 / math.max(count, 1), -6, 1, 0)
-	end
 end
 
 local function pillStyle(c: HitPresentation.Counter): Color3
@@ -377,32 +281,14 @@ local function onRender(dt: number)
 	counterScale.Scale = if punch < 1 then 1 + (hud.FinalPunchScale - 1) * (1 - punch) ^ 2 else 1
 	setGroup(counter, counterAlpha)
 
-	-- Result card
-	local showCard = false
-	if hit and phase == "Landed" then
+	-- Landing result cue (the result itself is in the Swing Analysis panel).
+	if hit and phase == "Landed" and resultPlayedFor ~= hit then
 		local landedFor = now - (hit.flight.launch.launchTime + CameraDirector.endTimeOf(hit))
-		local timing = PresentationConfig.Timing
-		showCard = landedFor >= hud.CardDelaySeconds and (hit.outcome ~= nil or landedFor >= timing.LandingHoldSeconds)
-		if showCard and cardShownFor ~= hit then
-			cardShownFor = hit
-			cardShownAt = os.clock()
-			fillCard(HitPresentation.summary({ flight = hit.flight, outcome = hit.outcome, contactLabel = hit.contactLabel }))
+		if landedFor >= hud.CardDelaySeconds and (hit.outcome ~= nil or landedFor >= PresentationConfig.Timing.LandingHoldSeconds) then
+			resultPlayedFor = hit
 			HitEffects.playResult()
-		elseif showCard and hit.outcome and cardHeadline.Text == "RESULT UNAVAILABLE" then
-			fillCard(HitPresentation.summary({ flight = hit.flight, outcome = hit.outcome, contactLabel = hit.contactLabel }))
 		end
 	end
-	if showCard then
-		local f = math.clamp((os.clock() - cardShownAt) / hud.CardInSeconds, 0, 1)
-		cardAlpha = CameraMath.easeOutCubic(f)
-		card.Position = UDim2.new(0.5, 0, 1, -40 + 18 * (1 - cardAlpha))
-	else
-		cardAlpha = CameraMath.damp(cardAlpha, 0, hud.CardOutSeconds / 3, dt)
-		if cardAlpha <= 0.002 then
-			cardShownFor = nil
-		end
-	end
-	setGroup(card, cardAlpha)
 
 	writeDebug(director, now, c)
 end
@@ -414,7 +300,6 @@ function HitHud.start()
 	screenGui.IgnoreGuiInset = true
 	screenGui.DisplayOrder = 6
 	buildCounter()
-	buildCard()
 	screenGui.Parent = Players.LocalPlayer:WaitForChild("PlayerGui")
 	-- After the camera (Camera + 1) so the HUD reads this frame's state.
 	RunService:BindToRenderStep(BIND_NAME, Enum.RenderPriority.Camera.Value + 5, onRender)

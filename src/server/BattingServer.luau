@@ -123,6 +123,7 @@ local function onSwingRequest(
 			payload.missReason = result.missReason
 			payload.missAmount = result.missAmount
 			payload.timingErrorSeconds = result.timingErrorSeconds
+			payload.ballX, payload.ballY = result.ballX, result.ballY
 			payload.minGap = if result.minGap < math.huge then result.minGap else nil
 			local contact = result.contact
 			GameplayServer.swing(player, request.seq, payload.pitchId ~= nil, contact ~= nil)

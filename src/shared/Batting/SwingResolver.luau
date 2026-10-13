@@ -26,6 +26,10 @@ export type Resolution = {
 	missAnalysis: MissClassifier.Analysis?,
 	idealContactTime: number?, -- server time the ball crosses the contact plane
 	timingErrorSeconds: number?, -- - = early, + = late
+	-- Where the ball crossed the contact plane (lane-local studs, same axes as
+	-- the aim: x = catcher's right, y = height above plate ground). Feedback only.
+	ballX: number?,
+	ballY: number?,
 	minGap: number, -- studs (math.huge if the windows never overlapped)
 	iterations: number,
 }
@@ -74,9 +78,15 @@ function SwingResolver.resolve(geometry: LaneGeometry.Geometry, flight: Pitch.Fl
 		missAnalysis = nil,
 		idealContactTime = ideal,
 		timingErrorSeconds = timingError,
+		ballX = nil,
+		ballY = nil,
 		minGap = math.huge,
 		iterations = 0,
 	}
+	if ideal then
+		local offset = PitchPhysics.sample(flight.trajectory, ideal - releaseTime) - SwingModel.contactPlane(geometry).point
+		resolution.ballX, resolution.ballY = offset:Dot(geometry.right), offset:Dot(geometry.up)
+	end
 
 	if not SwingResolver.overlapsFlight(swing, flight) then
 		resolution.missReason = "NoOverlap"

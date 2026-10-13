@@ -101,12 +101,19 @@ function ImpactModel.collisionEfficiency(restitution: number, inverseMass: numbe
 	return (restitution - r) / (1 + r)
 end
 
--- Virtual impact surface: preserve in-plane direction, soften vertical tilt.
--- The actual swept contact/time/position and measured quality are untouched.
+-- Virtual impact surface: preserve in-plane direction, soften vertical tilt,
+-- then lift it. The actual swept contact/time/position and measured quality
+-- are untouched.
 -- f(u)=k*u+(1-k)*sign(u)*((max(|u|-s,0)/(1-s))^3).
 -- Monotonic for 0<k<=1, C2 at the shoulder, odd, with f(0)=0/f(±1)=±1.
+-- Lift (arcade): the mapped tilt is rotated up by LiftDegrees, so a centered
+-- hit flies like a slightly-under one would physically. The lift fades out
+-- past the shoulder (w = 1 - smoothstep(shoulder), C1 at the shoulder), so glancing edge contacts keep their
+-- original weak behavior and f(+-1) = +-1. Still monotonic in u (tested):
+-- aiming lower always launches higher, higher always lower.
 function ImpactModel.contactNormal(normal: Vector3, up: Vector3, config: typeof(BattedBallConfig.ArcadeContact)): Vector3
-	if not config.Enabled or config.CenterSlope == 1 then
+	local lift = math.rad(config.LiftDegrees or 0)
+	if not config.Enabled or (config.CenterSlope == 1 and lift == 0) then
 		return normal
 	end
 	local u = math.clamp(normal:Dot(up), -1, 1)
@@ -118,6 +125,10 @@ function ImpactModel.contactNormal(normal: Vector3, up: Vector3, config: typeof(
 	local s = math.clamp(config.ShoulderStart, 0, 0.99)
 	local shoulder = math.max(0, (math.abs(u) - s) / (1 - s))
 	local mapped = k * u + (1 - k) * math.sign(u) * shoulder ^ 3
+	if lift ~= 0 then
+		local weight = 1 - shoulder * shoulder * (3 - 2 * shoulder)
+		mapped = math.sin(math.clamp(math.asin(math.clamp(mapped, -1, 1)) + lift * weight, -math.pi / 2, math.pi / 2))
+	end
 	return horizontal.Unit * math.sqrt(math.max(0, 1 - mapped * mapped)) + up * mapped
 end
 

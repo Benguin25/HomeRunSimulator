@@ -49,7 +49,19 @@ Config.Environment = {
 		Saturation = 0.1,
 	},
 }
-Config.Rookie = { CatchmentEnabled = true, ForwardStuds = 2200, WidthStuds = 4400, DropStuds = 0.5 }
+-- Stage 2: the flat Rookie catchment now spans the visible world (about 20,000 ft
+-- forward, +/-16,000 studs wide, 9,000 studs behind the park) so high-Power
+-- hits at Rookie land on measured ground instead of resolving NoImpact, and no
+-- visible street lacks ground. Same height (0.5 below plate level), same flat
+-- surface and collision rules; client scenery is never added to it.
+Config.Rookie = {
+	CatchmentEnabled = true,
+	ForwardStuds = 22000,
+	WidthStuds = 32000,
+	BackStuds = 9000,
+	DropStuds = 0.5,
+	TileStuds = 2000,
+}
 Config.Worlds = {
 	{
 		id = "rookie",

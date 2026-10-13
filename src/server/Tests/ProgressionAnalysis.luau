@@ -12,6 +12,10 @@ local BBTU = require(script.Parent.BattedBallTestUtil)
 local Test = require(script.Parent.TestUtil)
 local Contact = require(Shared.Batting.ContactQuality)
 local Analysis = {}
+-- Offsets are { lateral m, vertical m, timing s } from a perfect swing. The
+-- vertical values were authored against the Stage 5A best swing (4 cm under
+-- the ball) and are applied as the same error from the current best swing
+-- (BBTU.skillAim), so profiles keep their skill when the tuning moves it.
 local profiles: { [string]: { { number } } } = {
 	Beginner = {
 		{ 0.15, 0.025, -0.045 },
@@ -58,7 +62,7 @@ local function inputs(offsets: { { number } }): { Sample }
 					local pitch = BBTU.pitch(geometry, 500 + seed * 37)
 					for _, offset in offsets do
 						table.insert(samples, {
-							contact = BBTU.swing(geometry, pitch, offset[1], offset[2], offset[3]).contact,
+							contact = BBTU.swing(geometry, pitch, offset[1], BBTU.skillAim(offset[2]), offset[3]).contact,
 							frame = Field.new(geometry),
 						})
 					end
@@ -221,7 +225,7 @@ function Analysis.run(): any
 	local geometry = Test.geometries().straight
 	local pitch = BBTU.pitch(geometry, 537)
 	local frame = Field.new(geometry)
-	local contact = assert(BBTU.swing(geometry, pitch, 0, -0.035, 0).contact, "ideal benchmark connects")
+	local contact = assert(BBTU.swing(geometry, pitch, 0, BBTU.skillAim(-0.035), 0).contact, "ideal benchmark connects")
 	for _, level in Config.Balance.Levels do
 		local launch = Ball.computeLaunch(
 			frame,

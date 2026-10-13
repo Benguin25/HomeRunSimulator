@@ -44,6 +44,7 @@ local BattingPresentation = require(script.Parent.BattingPresentation)
 local CharacterGrip = require(script.Parent.CharacterGrip)
 local PitchVisualController = require(script.Parent.PitchVisualController)
 local Input = require(script.Parent.InputCoordinator)
+local SwingAnalysisHud = require(script.Parent.SwingAnalysisHud)
 
 local BattingController = {}
 
@@ -170,6 +171,9 @@ local function updatePending(now: number)
 					BattingPresentation.showContactLabel(serverContact, geo)
 				elseif server.pitchId then
 					BattingPresentation.showMissLabel(server.missReason, server.missAmount, geo)
+				end
+				if server.pitchId and server.laneId == entry.laneId then
+					SwingAnalysisHud.present(server, geo)
 				end
 			end
 		end

@@ -29,8 +29,17 @@ BattedBallController.start()
 BattingController.start()
 GameplayController.start()
 GameplayHud.start()
+local SwingAnalysisHud = require(script.SwingAnalysisHud)
+SwingAnalysisHud.start()
+GameplayController.onSnapshot(function(snapshot)
+	local award = snapshot.stats.award
+	if award then
+		SwingAnalysisHud.onAward(award.hitId, award.newRecord and not award.baseline)
+	end
+end)
 require(script.WorldController).start()
 require(script.WorldAtmosphere).start()
+require(script.EnvironmentController).start()
 ProgressionHud.start()
 require(script.WorldHud).start()
 require(script.BattingModeController).start()

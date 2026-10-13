@@ -7,8 +7,10 @@
 -- so the number of connections never grows with the number of pitches.
 --
 -- Timeline (server time):
---   windupTime .. releaseTime : ball follows the procedural throwing hand
---                               to the exact release point (cosmetic pose)
+--   windupTime .. releaseTime : hidden in the glove until the hands break,
+--                               then held in the pitcher's throwing hand
+--                               (PitcherMotion), which reaches the exact
+--                               release point at the release time
 --   releaseTime .. +endTime   : ball follows the simulated trajectory exactly
 --   afterwards                : brief hold + fade in the catcher's mitt
 
@@ -22,9 +24,6 @@ local PitcherMotion = require(script.Parent.Parent.Presentation.PitcherMotion)
 local PitchPlayback = {}
 PitchPlayback.__index = PitchPlayback
 
-local FADE_IN_START = 0.12 -- fraction of the windup
-local FADE_IN_END = 0.3
-local ARM_SWING_START = 0.55
 local CATCH_HOLD_SECONDS = 0.18
 local CATCH_FADE_SECONDS = 0.22
 
@@ -60,10 +59,22 @@ function PitchPlayback.new(geometry: LaneGeometry.Geometry, flight: Pitch.Flight
 	return self
 end
 
-local function windupPosition(self: PitchPlayback, u: number): Vector3
+-- Where the ball is held before release: the same pose the pitcher rig renders.
+function PitchPlayback.heldPosition(self: PitchPlayback, serverNow: number): Vector3
 	local data = self.flight.data
-	local now = data.windupTime + u * (data.releaseTime - data.windupTime)
-	return PitcherMotion.sample(self.geometry, data.windupTime, data.releaseTime, data.releasePosition, now).hand
+	return PitcherMotion.sample(self.geometry, data.windupTime, data.releaseTime, data.releasePosition, serverNow).hand
+end
+
+-- Soft ground shadow that fades in as the ball approaches the plate.
+local function updateShadow(self: PitchPlayback, ball: BallVisual.BallVisual, position: Vector3)
+	local geometry = self.geometry
+	local cfg = PitchConfig.Ball
+	local total = (geometry.releasePoint - geometry.plateGround):Dot(-geometry.toPitcher)
+	local progress = if total > 1e-3 then 1 - (position - geometry.plateGround):Dot(geometry.toPitcher) / total else 0
+	local start = cfg.ShadowStartFraction
+	local opacity = cfg.ShadowMaxOpacity * math.clamp((progress - start) / math.max(1 - start, 1e-3) * 2, 0, 1)
+	local ground = position - geometry.up * ((position - geometry.plateGround):Dot(geometry.up) - geometry.units.toStuds(0.01))
+	ball:setShadow(ground, opacity)
 end
 
 -- Returns false once the playback has finished and destroyed itself.
@@ -82,11 +93,11 @@ function PitchPlayback.update(self: PitchPlayback, serverNow: number): boolean
 	if t < 0 then
 		local duration = math.max(data.releaseTime - data.windupTime, 1e-3)
 		local u = math.clamp((serverNow - data.windupTime) / duration, 0, 1)
-		local alpha = math.clamp((u - FADE_IN_START) / (FADE_IN_END - FADE_IN_START), 0, 1)
-		ball:setTransparency(1 - alpha)
-		-- The streak behind the ball during the arm swing is the "it's coming" cue.
-		ball:setTrailEnabled(u >= ARM_SWING_START)
-		ball:setCFrame(CFrame.new(windupPosition(self, u)))
+		ball:setTransparency(1 - PitcherMotion.ballAlpha(u))
+		-- A short streak once the arm whips forward is the "here it comes" cue.
+		ball:setTrailEnabled(PitcherMotion.trailOn(u))
+		ball:setCFrame(CFrame.new(self:heldPosition(serverNow)))
+		ball:setShadow(nil, 0)
 		return true
 	end
 
@@ -98,6 +109,7 @@ function PitchPlayback.update(self: PitchPlayback, serverNow: number): boolean
 	ball:setCFrame(CFrame.new(position) * rotation)
 
 	if t <= endTime then
+		updateShadow(self, ball, position)
 		ball:setTransparency(0)
 		ball:setTrailEnabled(true)
 		return true
@@ -105,6 +117,7 @@ function PitchPlayback.update(self: PitchPlayback, serverNow: number): boolean
 
 	-- Caught: hold, then fade out.
 	ball:setTrailEnabled(false)
+	ball:setShadow(nil, 0)
 	local after = t - endTime - CATCH_HOLD_SECONDS
 	if after < CATCH_FADE_SECONDS then
 		ball:setTransparency(math.clamp(after / CATCH_FADE_SECONDS, 0, 1))

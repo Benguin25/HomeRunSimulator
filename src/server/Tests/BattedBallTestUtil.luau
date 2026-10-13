@@ -270,6 +270,40 @@ function BattedBallTestUtil.hit(
 	return BattedBall.buildFlight(frame, launch, flightConfig), contact, impact, frame
 end
 
+-- Vertical aim (whole millimeters relative to the ball's contact-plane
+-- crossing) that gives the longest flat-field carry under the current impact
+-- tuning, measured on the balance reference pitch: -40 with Stage 5A tuning,
+-- ~0 with the Stage 1 arcade lift. Progression analyses express player skill
+-- as errors relative to this, so a tuning change that moves the best swing
+-- does not turn their "skilled" aim into a mis-hit.
+local idealAimCache: { [string]: number } = {}
+function BattedBallTestUtil.idealAimMm(): number
+	local key = tostring(BattedBallConfig.ArcadeContact.LiftDegrees or 0)
+	local cached = idealAimCache[key]
+	if cached then
+		return cached
+	end
+	local geometry = TestUtil.geometries().straight
+	local pitch = BattedBallTestUtil.pitch(geometry, 537)
+	local best, bestMm = -1, 0
+	for mm = -60, 20, 5 do
+		local flight = BattedBallTestUtil.hit(geometry, pitch, 0, mm / 1000, 0)
+		local carry = if flight.fieldLanding then flight.fieldLanding.distance else 0
+		if carry > best then
+			best, bestMm = carry, mm
+		end
+	end
+	idealAimCache[key] = bestMm
+	return bestMm
+end
+
+-- A profile's vertical offset authored against the Stage 5A best swing
+-- (-40 mm), re-expressed against the current best swing (exact for Stage 5A).
+function BattedBallTestUtil.skillAim(stage5aOffsetMeters: number): number
+	local errorMm = math.floor(stage5aOffsetMeters * 1000 + 40 + 0.5)
+	return (BattedBallTestUtil.idealAimMm() + errorMm) / 1000
+end
+
 -- Runs `fn` with PitchConfig.Geometry.BatterSide temporarily set.
 function BattedBallTestUtil.withBatterSide(side: string, fn: () -> ())
 	local geometryConfig = require(Shared.Pitching.PitchConfig).Geometry :: any

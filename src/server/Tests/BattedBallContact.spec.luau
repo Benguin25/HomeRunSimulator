@@ -50,13 +50,15 @@ local function spearman(a: { number }, b: { number }): number
 end
 
 return function(t)
-	t.test("squared-up contact is a hard line drive up the middle", function()
+	-- Stage 1 arcade lift (BattedBallConfig.ArcadeContact.LiftDegrees): a
+	-- squared-up hit flies at a home-run angle instead of a low line drive.
+	t.test("squared-up contact is a hard, elevated drive up the middle", function()
 		for laneName, geometry in TestUtil.geometries() do
 			for seed = 1, 6 do
 				local pitch = BBTU.pitch(geometry, seed * 13)
 				local flight, contact, impact, frame = BBTU.hit(geometry, pitch, 0, 0, 0)
 				TestUtil.assertTrue(flight.exitSpeedMph > 95 and flight.exitSpeedMph < 115, string.format("%s seed %d: EV %.1f mph", laneName, seed, flight.exitSpeedMph))
-				TestUtil.assertTrue(flight.launchAngleDegrees > -6 and flight.launchAngleDegrees < 15, string.format("%s: launch %.1f", laneName, flight.launchAngleDegrees))
+				TestUtil.assertTrue(flight.launchAngleDegrees > 15 and flight.launchAngleDegrees < 32, string.format("%s: launch %.1f", laneName, flight.launchAngleDegrees))
 				TestUtil.assertTrue(math.abs(flight.sprayAngleDegrees) < 15, string.format("%s: spray %.1f", laneName, flight.sprayAngleDegrees))
 				TestUtil.assertEqual(BattedBall.describeContact(frame, contact, impact), "Squared", `{laneName} seed {seed}: contact type`)
 				TestUtil.assertTrue(impact.velocity.Magnitude > 0.85 * impact.idealExitSpeed, `{laneName}: squared-up EV near ideal`)
@@ -69,14 +71,15 @@ return function(t)
 			local pitch = BBTU.pitch(geometry, 21)
 			local under = BBTU.hit(geometry, pitch, 0, -3 * CM, 0)
 			local center = BBTU.hit(geometry, pitch, 0, 0, 0)
-			local topped = BBTU.hit(geometry, pitch, 0, 3 * CM, 0)
+			local topped = BBTU.hit(geometry, pitch, 0, 5 * CM, 0)
 			TestUtil.assertTrue(under.launchAngleDegrees > center.launchAngleDegrees + 10, `{laneName}: under launches higher`)
 			TestUtil.assertTrue(center.launchAngleDegrees > topped.launchAngleDegrees + 10, `{laneName}: topped launches lower`)
 			TestUtil.assertTrue(topped.launchAngleDegrees < 0, `{laneName}: topped ball goes down`)
 			TestUtil.assertTrue(under.backspinRpm > 1000, string.format("%s: under backspin %.0f rpm", laneName, under.backspinRpm))
 			TestUtil.assertTrue(topped.backspinRpm < 0, string.format("%s: topped should have topspin (%.0f rpm)", laneName, topped.backspinRpm))
 			TestUtil.assertTrue(under.apexHeightMeters > center.apexHeightMeters + 5, `{laneName}: fly ball apex`)
-			TestUtil.assertTrue(projected(under) > projected(center) and projected(center) > projected(topped), `{laneName}: carry ordering`)
+			-- Centered contact now carries farthest; under pops up, topped goes down.
+			TestUtil.assertTrue(projected(center) > projected(under) and projected(under) > projected(topped), `{laneName}: carry ordering`)
 			local deepUnder, c1, i1, frame = BBTU.hit(geometry, pitch, 0, -8 * CM, 0)
 			TestUtil.assertEqual(BattedBall.describeContact(frame, c1, i1), "Under", `{laneName}: deep undercut type`)
 			local _, c2, i2 = BBTU.hit(geometry, pitch, 0, 3 * CM, 0)
@@ -156,7 +159,11 @@ return function(t)
 		local perfect = BBTU.hit(geometry, pitch, 0, 0, 0)
 		-- Ball just under the bottom edge of the barrel: a glancing foul tip / pop-up.
 		local glancing, c, i, frame = BBTU.hit(geometry, pitch, 0, 8.5 * CM, 0)
-		TestUtil.assertTrue(glancing.exitSpeedMph < 0.7 * perfect.exitSpeedMph, string.format("glancing EV %.1f mph", glancing.exitSpeedMph))
+		-- (0.75: the Stage 1 lift trades ~5 mph of a centered hit for launch
+		-- angle, so the ratio to "perfect" rose from 0.65 to ~0.71; the
+		-- glancing hit itself is still a steep, ~3 ft dribbler.)
+		TestUtil.assertTrue(glancing.exitSpeedMph < 0.75 * perfect.exitSpeedMph, string.format("glancing EV %.1f mph", glancing.exitSpeedMph))
+		TestUtil.assertTrue(glancing.launchAngleDegrees < -40, string.format("glancing launch %.1f", glancing.launchAngleDegrees))
 		local kind = BattedBall.describeContact(frame, c, i)
 		TestUtil.assertTrue(kind == "Glancing" or kind == "Weak" or kind == "Topped", `glancing type {kind}`)
 		-- Jammed on the handle.

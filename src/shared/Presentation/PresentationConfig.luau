@@ -242,4 +242,33 @@ PresentationConfig.Sounds = {
 	Rebirth = { Id = "rbxasset://sounds/volume_slider.ogg", Volume = 0.45, Speed = 0.9 },
 }
 
+-- Post-swing analysis panel (timing, contact placement, coaching tip). Every
+-- number shown comes from the server's swing result / batted-ball records.
+PresentationConfig.SwingAnalysis = {
+	-- Timing classes as fractions of BattingConfig.Quality.TimingToleranceSeconds
+	-- (the error at which the contact-quality timing factor reaches zero).
+	PerfectFraction = 0.18, -- |error| <= ~13 ms: PERFECT
+	GoodFraction = 0.45, -- <= ~32 ms: GOOD (just early / just late)
+	-- Up to 1x tolerance: EARLY / LATE; beyond it: VERY EARLY / VERY LATE.
+	MeterRangeFraction = 2, -- the timing meter spans +/- this many tolerances
+	-- Placement calls (aimed high/low, inside/outside) only beyond this distance.
+	PlacementCallMeters = 0.03,
+	-- A contact factor below this is worth a coaching tip.
+	TipFactorBelow = 0.9,
+	-- Height tips use the confirmed launch angle: at/above PopUp the bat was
+	-- under the ball, at/below GroundBall it topped it; in between the flight
+	-- was fine and no height correction is suggested.
+	PopUpDegrees = 40,
+	GroundBallDegrees = 5,
+	-- Panel lifecycle (seconds).
+	MissDelaySeconds = 0, -- after the server answer / the moment of the miss
+	ContactDelaySeconds = 0.35, -- lets the contact beat read first
+	InSeconds = 0.25,
+	OutSeconds = 0.25,
+	HideBeforeReleaseSeconds = 0.35, -- fades out late in the next windup
+	MaxMissSeconds = 9,
+	MaxContactSeconds = 25,
+	CompactKey = "H", -- toggles the compact (one-line) layout
+}
+
 return PresentationConfig

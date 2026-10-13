@@ -80,10 +80,11 @@ function Registry.rookieCatchment(geometry: Geometry.Geometry)
 	end
 	local width, forward = Config.Rookie.WidthStuds / 2, Config.Rookie.ForwardStuds
 	local y, color = -Config.Rookie.DropStuds, Color3.fromRGB(52, 104, 62)
-	Build.ground(model, frame, -width, width, -forward, minZ, y, color)
-	Build.ground(model, frame, -width, minX, minZ, maxZ, y, color)
-	Build.ground(model, frame, maxX, width, minZ, maxZ, y, color)
-	Build.ground(model, frame, -width, width, maxZ, math.max(maxZ + 50, 450), y, color)
+	local tile = Config.Rookie.TileStuds
+	Build.ground(model, frame, -width, width, -forward, minZ, y, color, tile)
+	Build.ground(model, frame, -width, minX, minZ, maxZ, y, color, tile)
+	Build.ground(model, frame, maxX, width, minZ, maxZ, y, color, tile)
+	Build.ground(model, frame, -width, width, maxZ, math.max(maxZ + 50, Config.Rookie.BackStuds), y, color, tile)
 	model.Parent = root
 end
 function Registry.collisionRoots(laneId: string): { Instance }

@@ -1,0 +1,176 @@
+--!strict
+-- Stage 2 environment: Rookie Park overhaul and the surrounding town/world.
+--
+-- Everything here is presentation. Scenery is generated per client from Rojo
+-- source (never saved into the place), never joins the authoritative landing
+-- set and never moves a gameplay marker. Set `Enabled = false` to fall back to
+-- the authored Studio stadium exactly as before.
+--
+-- Units: studs unless a name says Feet/Meters. 1 stud = 0.28 m (Units.luau),
+-- so 1 ft = 1.0886 studs.
+
+local Config = {}
+
+Config.Enabled = true
+Config.Seed = 20261013
+Config.FolderName = "RookieEnvironment" -- client-local Workspace folder
+
+-- Measured from the authored Rookie Park (Workspace.Stadium / GameplayMarkers,
+-- Oct 2026). The controller derives the plate/forward frame from the replicated
+-- lane attributes when available; these heights are absolute world Y values.
+Config.Site = {
+	Plate = Vector3.new(0, 0, 140), -- home plate centre (ground)
+	Forward = Vector3.new(0, 0, -1), -- plate -> pitcher, horizontal
+	BaseDistance = 72.0, -- home -> first base (studs)
+	RubberDistance = 48.4, -- home -> pitching rubber centre
+	FenceCornerRadius = 270, -- fence radius at the foul poles (spray +/-45 deg)
+	FenceCenterRadius = 320, -- fence radius in straightaway centre field
+	FenceHeight = 8,
+	StudsToFeet = 0.28 / 0.3048, -- display only (Units.luau: 1 stud = 0.28 m)
+	FoulPoleHeight = 30,
+	-- Surface tops (world Y). Visual layers match the authored collision tops so
+	-- feet, the pitcher and landed balls sit where they did before.
+	BaseplateTop = 0, -- Workspace.Baseplate (512 x 512, centred on the world origin)
+	BaseplateHalf = 256,
+	StreetTop = -0.5, -- RookieCatchment top (WorldConfig.Rookie.DropStuds)
+	GrassTop = 0.12,
+	DirtTop = 0.2,
+	MoundTop = 0.8,
+	RubberTop = 0.92,
+}
+
+-- Authored Stadium folders hidden locally (Transparency only: collision, landing
+-- and markers are untouched). Bases, plate, rubber and chalk stay visible.
+Config.HideStadium = {
+	Folders = { "Field", "OutfieldFence", "Bleachers" },
+	Parts = { "PitchersMound" },
+	HideBaseplate = true,
+	HideCatchment = true,
+}
+
+-- Client build pacing and level of detail.
+Config.Build = {
+	FrameBudgetSeconds = 0.006, -- realize parts for at most this long per frame
+	LodCheckSeconds = 0.4,
+	PartBudget = 40000, -- hard ceiling across the whole plan (tests enforce it)
+	StadiumBudget = 12000,
+}
+
+-- Distance classes for detail chunks: hidden when the camera is farther than
+-- this beyond the chunk bounds. 0 = always present (silhouettes, landmarks).
+Config.Lod = {
+	Props = 650,
+	Detail = 1400,
+	District = 4200,
+}
+
+local function rgb(r: number, g: number, b: number): { number }
+	return { r, g, b }
+end
+Config.rgb = rgb
+
+-- Art direction: a classic, sunny minor-league park. Brick and cream limestone
+-- outside; "ballpark green" steel; navy seats with red accents; bright but
+-- restrained signage. Neon is reserved for scoreboard LEDs.
+Config.Palette = {
+	Grass = rgb(70, 132, 62),
+	GrassStripe = rgb(86, 150, 72),
+	FoulGrass = rgb(66, 124, 58),
+	Lawn = rgb(88, 142, 70),
+	Dirt = rgb(176, 114, 76),
+	DirtDark = rgb(156, 98, 66),
+	Track = rgb(142, 90, 64),
+	Chalk = rgb(246, 244, 236),
+	WallPad = rgb(32, 82, 60),
+	WallCap = rgb(255, 200, 46),
+	BatterEye = rgb(24, 44, 36),
+	Steel = rgb(40, 92, 72),
+	SteelDark = rgb(30, 62, 50),
+	Seat = rgb(38, 66, 122),
+	SeatAccent = rgb(196, 52, 52),
+	SeatPremium = rgb(28, 46, 88),
+	Concrete = rgb(198, 194, 186),
+	ConcreteDark = rgb(150, 148, 142),
+	Brick = rgb(152, 72, 52),
+	BrickDark = rgb(118, 56, 44),
+	Limestone = rgb(226, 214, 190),
+	Roof = rgb(236, 236, 230),
+	Glass = rgb(92, 128, 150),
+	Navy = rgb(26, 44, 82),
+	Red = rgb(206, 52, 52),
+	Yellow = rgb(255, 196, 46),
+	Sky = rgb(70, 164, 222),
+	White = rgb(244, 244, 240),
+	Black = rgb(28, 28, 32),
+	Wood = rgb(150, 104, 66),
+	Asphalt = rgb(70, 72, 78),
+	Sidewalk = rgb(184, 182, 176),
+	Curb = rgb(206, 204, 198),
+	Paint = rgb(240, 236, 220),
+	PaintYellow = rgb(236, 190, 60),
+	Water = rgb(64, 132, 168),
+	Foliage = rgb(68, 120, 56),
+	FoliageDark = rgb(48, 94, 48),
+	FoliageLight = rgb(106, 150, 64),
+	Trunk = rgb(100, 72, 50),
+}
+
+-- Client lighting for Rookie (afternoon). WorldAtmosphere picks the
+-- ClockTime/latitude candidate that puts the sun behind and above the batter,
+-- using the engine's own Lighting:GetSunDirection().
+Config.Lighting = {
+	SunCandidates = {
+		{ ClockTime = 14.6, GeographicLatitude = 32 },
+		{ ClockTime = 9.4, GeographicLatitude = 32 },
+		{ ClockTime = 14.6, GeographicLatitude = -32 },
+		{ ClockTime = 9.4, GeographicLatitude = -32 },
+	},
+	TargetElevationDegrees = 52,
+	Brightness = 3,
+	Ambient = rgb(96, 100, 110),
+	OutdoorAmbient = rgb(132, 138, 150),
+	ExposureCompensation = 0.05,
+	EnvironmentDiffuseScale = 0.6,
+	EnvironmentSpecularScale = 0.7,
+	ShadowSoftness = 0.12,
+	FogStart = 0,
+	FogEnd = 100000,
+	Atmosphere = {
+		Density = 0.24,
+		Offset = 0.12,
+		Color = rgb(199, 216, 232),
+		Decay = rgb(108, 128, 158),
+		Glare = 0.18,
+		Haze = 1.1,
+	},
+	Grade = { Tint = rgb(255, 251, 245), Contrast = 0.07, Saturation = 0.1, Brightness = 0.01 },
+	Bloom = { Intensity = 0.55, Size = 22, Threshold = 1.7 },
+	SunRays = { Intensity = 0.035, Spread = 0.25 },
+	-- Keep the pitcher, release and incoming ball crisp.
+	DepthOfField = { FarIntensity = 0.04, FocusDistance = 0.05, InFocusRadius = 140, NearIntensity = 0 },
+}
+
+-- Ambience integration points. No verified/licensed ambience assets exist in
+-- this project yet, so every Id is empty and nothing plays. Supply licensed
+-- asset IDs here; volumes are deliberately low so pitch/contact cues dominate.
+Config.Ambience = {
+	MaxVolume = 0.35,
+	Crowd = { Id = "", Volume = 0.18, Radius = 700 },
+	Wind = { Id = "", Volume = 0.08 },
+	City = { Id = "", Volume = 0.1 },
+	Nature = { Id = "", Volume = 0.1 },
+}
+
+-- Cosmetic motion (cheap CFrame sway on a handful of tagged parts).
+Config.Motion = {
+	FlagSwayDegrees = 7,
+	FlagSwaySeconds = 2.6,
+	MaxAnimatedParts = 80,
+}
+
+-- Scoreboard shows only server-confirmed session data for the local player.
+Config.Scoreboard = {
+	HomeRunFlashSeconds = 4,
+}
+
+return Config
