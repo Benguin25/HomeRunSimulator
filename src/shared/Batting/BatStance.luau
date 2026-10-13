@@ -67,7 +67,12 @@ end
 -- The bat while waiting: in the hands, tilted back over the rear shoulder
 -- (the swing model's rest direction), drifting toward the aimed swing by
 -- Stance.PreloadFraction.
-function BatStance.readyPose(geometry: LaneGeometry.Geometry, anchor: Vector3, aimX: number, aimY: number): SwingModel.Pose
+function BatStance.readyPose(
+	geometry: LaneGeometry.Geometry,
+	anchor: Vector3,
+	aimX: number,
+	aimY: number
+): SwingModel.Pose
 	local base = SwingModel.restPose(geometry, aimX, aimY)
 	local length = SwingModel.dimensions(geometry).length
 	local knob = anchor:Lerp(base.knob, BattingConfig.Stance.PreloadFraction)
@@ -82,7 +87,12 @@ function BatStance.readyPose(geometry: LaneGeometry.Geometry, anchor: Vector3, a
 end
 
 -- Moves `current` toward `target` with a time constant (frame-rate independent).
-function BatStance.follow(current: SwingModel.Pose, target: SwingModel.Pose, dt: number, length: number): SwingModel.Pose
+function BatStance.follow(
+	current: SwingModel.Pose,
+	target: SwingModel.Pose,
+	dt: number,
+	length: number
+): SwingModel.Pose
 	local tau = BattingConfig.Stance.ReadyFollowSeconds
 	local alpha = if tau <= 0 then 1 else 1 - math.exp(-math.max(dt, 0) / tau)
 	return BatStance.blend(current, target, alpha, length)
@@ -124,7 +134,7 @@ end
 -- follow-through's end angle and raise it equals the follow-through's last pose.
 function BatStance.poseAtAngle(swing: SwingModel.Swing, angle: number, raise: number): SwingModel.Pose
 	local flat = SwingModel.directionAt(swing, angle)
-	local direction = if raise == 0 then flat else (flat * math.cos(raise) + swing.axis * math.sin(raise)).Unit
+	local direction = if raise == 0 then flat else (flat * math.cos(raise) + swing.raiseAxis * math.sin(raise)).Unit
 	local knob = swing.pivot + flat * swing.dims.pivotRadius
 	return {
 		knob = knob,

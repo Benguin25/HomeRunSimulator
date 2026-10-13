@@ -22,6 +22,9 @@ export type Inputs = {
 	pitcherGround: Vector3, -- pitcher marker at ground level
 	releasePoint: Vector3?, -- explicit release marker, if one exists
 	batterGround: Vector3?, -- batter marker at ground level, if one exists
+	batterSide: ("Right" | "Left")?, -- explicit server-selected hand; absent in legacy benchmarks
+	rightBatterGround: Vector3?,
+	leftBatterGround: Vector3?,
 	-- Optional field markers (Phase 3A, see BattedBall/FieldFrame): foul poles
 	-- and bases define the foul lines. Unused by pitching.
 	leftFoulPole: Vector3?,
@@ -81,7 +84,7 @@ function LaneGeometry.new(inputs: Inputs, config: typeof(PitchConfig)?): Geometr
 	local zoneTop = units.toStuds(zone.TopMeters)
 
 	-- Right-handed batters stand on the catcher's left.
-	local batterSideSign = if geo.BatterSide == "Left" then 1 else -1
+	local batterSideSign = if (inputs.batterSide or geo.BatterSide) == "Left" then 1 else -1
 	local batterGround = inputs.batterGround
 		or (inputs.plateGround + right * (batterSideSign * units.toStuds(geo.BatterOffsetFromPlateMeters)))
 	local facePlate = horizontal(inputs.plateGround - batterGround)
@@ -108,6 +111,23 @@ function LaneGeometry.new(inputs: Inputs, config: typeof(PitchConfig)?): Geometr
 		floorY = math.min(inputs.plateGround.Y, inputs.pitcherGround.Y),
 		batterCFrame = CFrame.lookAt(batterGround, batterGround + facePlate.Unit),
 	}
+end
+
+function LaneGeometry.boxGround(geometry: Geometry, side: "Right" | "Left"): Vector3
+	local point = if side == "Right" then geometry.inputs.rightBatterGround else geometry.inputs.leftBatterGround
+	return point
+		or (
+			geometry.plateGround
+			+ geometry.right
+				* geometry.units.toStuds(PitchConfig.Geometry.BatterOffsetFromPlateMeters)
+				* (if side == "Left" then 1 else -1)
+		)
+end
+
+function LaneGeometry.forBatter(geometry: Geometry, side: "Right" | "Left"): Geometry
+	local inputs = table.clone(geometry.inputs)
+	inputs.batterSide, inputs.batterGround = side, LaneGeometry.boxGround(geometry, side)
+	return LaneGeometry.new(inputs)
 end
 
 -- World point on the zone plane: x = lateral offset from plate center (studs,

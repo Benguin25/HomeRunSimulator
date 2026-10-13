@@ -58,6 +58,7 @@ export type Swing = {
 	across: Vector3,
 	tangent: Vector3,
 	axis: Vector3,
+	raiseAxis: Vector3, -- upward cosmetic raise for either hand; collision still uses axis
 	omega: number, -- rad/s during Active
 	timeline: Timeline,
 	activeStart: number, -- server time
@@ -107,8 +108,9 @@ function SwingModel.dimensions(geometry: LaneGeometry.Geometry): BatDimensions
 end
 
 -- Batter side sign as used by LaneGeometry (+1 = batter on the catcher's right).
-function SwingModel.batterSideSign(): number
-	return if PitchConfig.Geometry.BatterSide == "Left" then 1 else -1
+function SwingModel.batterSideSign(geometry: LaneGeometry.Geometry?): number
+	local side = if geometry then geometry.inputs.batterSide else nil
+	return if (side or PitchConfig.Geometry.BatterSide) == "Left" then 1 else -1
 end
 
 -- The vertical plane aim is projected onto (normal points toward the catcher,
@@ -131,7 +133,10 @@ end
 function SwingModel.aimBounds(geometry: LaneGeometry.Geometry): (number, number, number, number)
 	local units = geometry.units
 	local aim = BattingConfig.Aim
-	return units.toStuds(aim.MinXMeters), units.toStuds(aim.MaxXMeters), units.toStuds(aim.MinYMeters), units.toStuds(aim.MaxYMeters)
+	return units.toStuds(aim.MinXMeters),
+		units.toStuds(aim.MaxXMeters),
+		units.toStuds(aim.MinYMeters),
+		units.toStuds(aim.MaxYMeters)
 end
 
 function SwingModel.clampAim(geometry: LaneGeometry.Geometry, aimX: number, aimY: number): (number, number)
@@ -172,7 +177,7 @@ end
 -- The swing pivot for an aim, without building a whole swing.
 function SwingModel.pivotFor(geometry: LaneGeometry.Geometry, aimX: number, aimY: number): Vector3
 	local dims = SwingModel.dimensions(geometry)
-	local across = geometry.right * -SwingModel.batterSideSign()
+	local across = geometry.right * -SwingModel.batterSideSign(geometry)
 	return SwingModel.aimToWorld(geometry, aimX, aimY) - across * (dims.pivotRadius + dims.sweetSpot)
 end
 
@@ -181,7 +186,7 @@ function SwingModel.new(geometry: LaneGeometry.Geometry, aimX: number, aimY: num
 	local dims = SwingModel.dimensions(geometry)
 	local timeline = SwingModel.timeline()
 
-	local across = geometry.right * -SwingModel.batterSideSign()
+	local across = geometry.right * -SwingModel.batterSideSign(geometry)
 	local attack = math.rad(cfg.AttackAngleDegrees)
 	local tangent = geometry.toPitcher * math.cos(attack) + geometry.up * math.sin(attack)
 	local axis = across:Cross(tangent).Unit
@@ -203,6 +208,7 @@ function SwingModel.new(geometry: LaneGeometry.Geometry, aimX: number, aimY: num
 		across = across,
 		tangent = tangent,
 		axis = axis,
+		raiseAxis = if axis.Y < 0 then -axis else axis,
 		omega = omega,
 		timeline = timeline,
 		activeStart = activeStart,
@@ -284,7 +290,8 @@ function SwingModel.anglesAt(swing: Swing, t: number): (number, number)
 	else -- Recovery: keep turning forward all the way round to the rest pose.
 		local s = smoothstep(u)
 		local target = swing.restAngle + 2 * math.pi
-		return swing.followEndAngle + (target - swing.followEndAngle) * s, swing.followRaise + (swing.restRaise - swing.followRaise) * s
+		return swing.followEndAngle + (target - swing.followEndAngle) * s,
+			swing.followRaise + (swing.restRaise - swing.followRaise) * s
 	end
 end
 
@@ -296,7 +303,7 @@ end
 function SwingModel.poseAt(swing: Swing, t: number): Pose
 	local angle, raise = SwingModel.anglesAt(swing, t)
 	local flat = SwingModel.directionAt(swing, angle)
-	local direction = if raise == 0 then flat else (flat * math.cos(raise) + swing.axis * math.sin(raise)).Unit
+	local direction = if raise == 0 then flat else (flat * math.cos(raise) + swing.raiseAxis * math.sin(raise)).Unit
 	local knob = swing.pivot + flat * swing.dims.pivotRadius
 	-- Bat "up": perpendicular to the bat, in the plane of the raise.
 	local planeNormal = if raise == 0 then swing.axis else direction:Cross(swing.axis:Cross(direction)).Unit

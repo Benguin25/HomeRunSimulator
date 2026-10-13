@@ -106,6 +106,15 @@ function Registry.collisionRoots(laneId: string): { Instance }
 	return roots
 end
 function Registry.visibility(player: Player, previous: string?, current: string)
+	local interaction = generated and generated:FindFirstChild("RookieBattingInteractions")
+	if interaction and interaction:IsA("Model") then
+		if previous == Config.DefaultId then
+			interaction:RemovePersistentPlayer(player)
+		end
+		if current == Config.DefaultId then
+			interaction:AddPersistentPlayer(player)
+		end
+	end
 	if previous then
 		local old = if previous == Config.DefaultId
 			then generated and generated:FindFirstChild("RookieCatchment")

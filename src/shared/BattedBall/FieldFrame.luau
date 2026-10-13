@@ -84,7 +84,7 @@ function FieldFrame.new(geometry: LaneGeometry.Geometry, batterSide: ("Right" | 
 		leftLineAngle = -math.rad(cfg.FallbackHalfAngleDegrees),
 		rightLineAngle = math.rad(cfg.FallbackHalfAngleDegrees),
 		foulLineSource = "rulebook (45 deg from home -> mound)",
-		batterSide = batterSide or PitchConfig.Geometry.BatterSide,
+		batterSide = batterSide or geometry.inputs.batterSide or PitchConfig.Geometry.BatterSide,
 	}
 
 	local left, leftSource = lineFrom(frame, {

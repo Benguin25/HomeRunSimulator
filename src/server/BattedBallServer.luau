@@ -199,6 +199,8 @@ function BattedBallServer.launch(
 	local hitId = nextHitId
 	-- Capture current authority at accepted contact, regardless of pitch age.
 	local powerLevel, powerVersion, rebirths = ProgressionServer.power(player)
+	-- The lane can be reused by the other hand after a completed hit.
+	lane.frame = FieldFrame.new(assert(PitchServer.getGeometry(laneId)))
 
 	local launch, impact = BattedBall.computeLaunch(lane.frame, contact, {
 		hitId = hitId,

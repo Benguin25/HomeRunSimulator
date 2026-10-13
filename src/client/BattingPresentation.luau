@@ -8,7 +8,7 @@
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local SoundService = game:GetService("SoundService")
+local Audio = require(script.Parent.GameAudio)
 local Workspace = game:GetService("Workspace")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
@@ -55,7 +55,6 @@ local batParts: { BasePart } = {}
 local batCFrames: { CFrame } = {}
 local batModel: Model? = nil
 local effects: { Effect } = {}
-local sounds: { [string]: Sound } = {}
 local aimVisible = true
 
 local function rgb(values: { number }): Color3
@@ -95,16 +94,6 @@ local function placeLine(frame: Frame, a: Vector2, b: Vector2, thickness: number
 	frame.Position = UDim2.fromOffset(mid.X, mid.Y)
 	frame.Size = UDim2.fromOffset(delta.Magnitude, thickness)
 	frame.Rotation = math.deg(math.atan2(delta.Y, delta.X))
-end
-
-local function makeSound(name: string, id: string, speed: number, volume: number): Sound
-	local sound = Instance.new("Sound")
-	sound.Name = name
-	sound.SoundId = id
-	sound.PlaybackSpeed = speed
-	sound.Volume = volume
-	sound.Parent = SoundService
-	return sound
 end
 
 local function buildGui()
@@ -192,8 +181,6 @@ function BattingPresentation.start()
 	folder.Name = "BattingVisuals"
 	folder.Parent = Workspace
 	buildGui()
-	sounds.Swing = makeSound("BatSwing", cfg.SwingSoundId, cfg.SwingSoundSpeed, 0.5)
-	sounds.Miss = makeSound("BatMiss", cfg.MissSoundId, cfg.MissSoundSpeed, 0.35)
 end
 
 -- (Re)builds the bat from the lane's collision dimensions.
@@ -209,9 +196,27 @@ function BattingPresentation.buildBat(dims: SwingModel.BatDimensions)
 	local barrelLength = dims.length - dims.barrelStart
 	-- Capsules, exactly like BatCollision: cylinders plus spherical end caps.
 	local parts: { BasePart } = {
-		newPart("Handle", Enum.PartType.Cylinder, Vector3.new(handleLength, dims.handleRadius * 2, dims.handleRadius * 2), handleColor, Enum.Material.SmoothPlastic),
-		newPart("Knob", Enum.PartType.Ball, Vector3.one * dims.handleRadius * 2.6, handleColor, Enum.Material.SmoothPlastic),
-		newPart("Barrel", Enum.PartType.Cylinder, Vector3.new(barrelLength, dims.barrelRadius * 2, dims.barrelRadius * 2), barrelColor, Enum.Material.Wood),
+		newPart(
+			"Handle",
+			Enum.PartType.Cylinder,
+			Vector3.new(handleLength, dims.handleRadius * 2, dims.handleRadius * 2),
+			handleColor,
+			Enum.Material.SmoothPlastic
+		),
+		newPart(
+			"Knob",
+			Enum.PartType.Ball,
+			Vector3.one * dims.handleRadius * 2.6,
+			handleColor,
+			Enum.Material.SmoothPlastic
+		),
+		newPart(
+			"Barrel",
+			Enum.PartType.Cylinder,
+			Vector3.new(barrelLength, dims.barrelRadius * 2, dims.barrelRadius * 2),
+			barrelColor,
+			Enum.Material.Wood
+		),
 		newPart("Tip", Enum.PartType.Ball, Vector3.one * dims.barrelRadius * 2, barrelColor, Enum.Material.Wood),
 		newPart("Taper", Enum.PartType.Ball, Vector3.one * dims.barrelRadius * 2, barrelColor, Enum.Material.Wood),
 	}
@@ -282,7 +287,7 @@ function BattingPresentation.updateReticle(
 
 	if cfg.ShowBarrelLine then
 		-- Where the barrel will be when square: barrel start -> tip.
-		local across = geometry.right * -SwingModel.batterSideSign()
+		local across = geometry.right * -SwingModel.batterSideSign(geometry)
 		local a = toScreen(camera, world - across * (dims.sweetSpot - dims.barrelStart))
 		local b = toScreen(camera, world + across * (dims.length - dims.sweetSpot))
 		placeLine(barrelLine, a, b, cfg.ReticleThicknessPixels)
@@ -336,7 +341,11 @@ function BattingPresentation.showContactLabel(contact: ContactQuality.ContactRes
 	end
 	local offCm = math.floor(math.abs(units.toMeters(contact.sweetSpotOffset)) * 100 + 0.5)
 	table.insert(parts, if offCm <= 2 then "sweet spot" else `{offCm} cm off the sweet spot`)
-	BattingPresentation.showLabel(`{string.upper(contact.label)}!`, LABEL_COLORS[contact.label], table.concat(parts, "  ·  "))
+	BattingPresentation.showLabel(
+		`{string.upper(contact.label)}!`,
+		LABEL_COLORS[contact.label],
+		table.concat(parts, "  ·  ")
+	)
 end
 
 -- Headline and hint per miss reason. `amount` is seconds for Early/Late and
@@ -383,11 +392,11 @@ function BattingPresentation.showMissLabel(reason: string?, amount: number?, geo
 end
 
 function BattingPresentation.playSwing()
-	sounds.Swing:Play()
+	Audio.play("Swing")
 end
 
 function BattingPresentation.playMiss()
-	sounds.Miss:Play()
+	Audio.play("Miss")
 end
 
 local function addEffect(effect: Effect)
@@ -395,7 +404,13 @@ local function addEffect(effect: Effect)
 end
 
 local function spawnMarker(position: Vector3, size: number)
-	local marker = newPart("ContactMarker", Enum.PartType.Ball, Vector3.one * size, Color3.fromRGB(255, 80, 200), Enum.Material.Neon)
+	local marker = newPart(
+		"ContactMarker",
+		Enum.PartType.Ball,
+		Vector3.one * size,
+		Color3.fromRGB(255, 80, 200),
+		Enum.Material.Neon
+	)
 	marker.CFrame = CFrame.new(position)
 	marker.Transparency = 0.15
 	marker.Parent = folder
@@ -416,7 +431,12 @@ local function spawnMarker(position: Vector3, size: number)
 end
 
 -- `intensity` (0..1, HitPresentation.intensity) scales the burst and picks the crack.
-function BattingPresentation.playContact(contact: ContactQuality.ContactResult, geometry: LaneGeometry.Geometry, intensity: number, direction: Vector3?)
+function BattingPresentation.playContact(
+	contact: ContactQuality.ContactResult,
+	geometry: LaneGeometry.Geometry,
+	intensity: number,
+	direction: Vector3?
+)
 	HitEffects.playImpact(contact.contactPoint, contact.impactNormal, direction, intensity)
 	spawnMarker(contact.contactPoint, geometry.units.toStuds(0.04))
 end

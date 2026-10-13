@@ -11,7 +11,6 @@ local Data = require(Shared.Progression.PlayerProgression)
 local ProgressionConfig = require(Shared.Progression.ProgressionConfig)
 local Progression = require(script.Parent.ProgressionController)
 local Controller = require(script.Parent.WorldController)
-local Camera = require(script.Parent.BattingCamera)
 local Debug = require(script.Parent.PitchDebugView)
 local Style = require(script.Parent.HudStyle)
 local Hud = {}
@@ -239,10 +238,7 @@ function Hud.start()
 			Controller.setOpen(false)
 		end
 		panel.Visible = Controller.isOpen()
-		open.Visible = not Debug.isVisible()
-			and Camera.isBattingView()
-			and not Progression.isOpen()
-			and not panel.Visible
+		open.Visible = not Debug.isVisible() and not Progression.isOpen() and not panel.Visible
 		current.AnchorPoint = if size.X < 700 then Vector2.zero else Vector2.new(0.5, 0)
 		current.Position = if size.X < 700
 			then UDim2.fromOffset(152, topInset + 26 + 94 * hudScale + 34)

@@ -22,6 +22,7 @@ local Units = require(Pitching.Units)
 
 local Worlds = require(script.Parent.Worlds.WorldRegistry)
 local WorldConfig = require(ReplicatedStorage.Shared.Worlds.WorldConfig)
+local ModeConfig = require(ReplicatedStorage.Shared.Gameplay.BattingModeConfig)
 
 local MarkerResolver = {}
 
@@ -235,6 +236,28 @@ local function resolveLane(laneId: string, laneRoot: Instance, markersRoot: Inst
 	end
 
 	local geometry = LaneGeometry.new(inputs)
+	-- Hand names use baseball convention, independent of world rotation.
+	for _, side in { "Right", "Left" } do
+		local names = { `{side}Batter`, `{side}BatterMarker`, `BatterMarker{side}` }
+		local marker = findMarker(laneRoot, stadium, names, {})
+		local point = marker and MarkerResolver.groundPosition(marker)
+		local sign = if side == "Right" then -1 else 1
+		local valid = point ~= nil
+			and (point - geometry.plateGround):Dot(geometry.right) * sign > 0
+			and geometry.units.toMeters((point - geometry.plateGround).Magnitude)
+				<= ModeConfig.MarkerMaxDistanceMeters
+		if not valid then
+			point = LaneGeometry.boxGround(geometry, side :: "Right" | "Left")
+			warn(`[Batting] {laneId}/{side}: missing or invalid box marker; using plate-relative fallback.`)
+		end
+		if side == "Right" then
+			inputs.rightBatterGround = point
+		else
+			inputs.leftBatterGround = point
+		end
+		sources[`{side}Batter`] = if valid and marker then marker:GetFullName() else "plate-relative fallback"
+	end
+	geometry = LaneGeometry.new(inputs)
 	local measuredMeters = units.toMeters(geometry.moundToPlate)
 	if math.abs(measuredMeters - geo.MoundToPlateMeters) > 3 then
 		warn(

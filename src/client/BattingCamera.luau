@@ -59,7 +59,7 @@ function BattingCamera.computeCFrame(geometry: LaneGeometry.Geometry): CFrame
 	local cfg = PitchConfig.Camera
 	local units = geometry.units
 	-- Right-handed batters stand on the catcher's left (-right).
-	local batterSign = if PitchConfig.Geometry.BatterSide == "Left" then 1 else -1
+	local batterSign = if (geometry.inputs.batterSide or PitchConfig.Geometry.BatterSide) == "Left" then 1 else -1
 	local position = geometry.plateGround
 		- geometry.toPitcher * units.toStuds(cfg.BackMeters)
 		+ geometry.up * units.toStuds(cfg.HeightMeters)
@@ -83,7 +83,7 @@ local function buildOcclusionParams(): RaycastParams
 			table.insert(exclude, child)
 		end
 	end
-	for _, name in { "HitEffects" } do
+	for _, name in { "HitEffects", "PitcherVisuals" } do
 		local child = Workspace:FindFirstChild(name)
 		if child then
 			table.insert(exclude, child)
@@ -202,13 +202,18 @@ local function deactivate()
 		if camera then
 			camera.CameraType = Enum.CameraType.Custom
 			camera.FieldOfView = savedFieldOfView or 70
+			local character = localPlayer.Character
+			local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+			if humanoid then
+				camera.CameraSubject = humanoid
+			end
 		end
 	end
 end
 
 local function refresh()
 	local laneId = localPlayer:GetAttribute(PitchNet.PlayerLaneAttribute)
-	if typeof(laneId) == "string" then
+	if typeof(laneId) == "string" and localPlayer:GetAttribute("BattingMode") == "Batting" then
 		activate(laneId)
 	else
 		deactivate()
@@ -217,8 +222,12 @@ end
 
 function BattingCamera.start()
 	localPlayer:GetAttributeChangedSignal(PitchNet.PlayerLaneAttribute):Connect(refresh)
+	localPlayer:GetAttributeChangedSignal("BattingMode"):Connect(refresh)
 	PitchVisualController.onGeometry(function(laneId)
-		if laneId == localPlayer:GetAttribute(PitchNet.PlayerLaneAttribute) then
+		if
+			laneId == localPlayer:GetAttribute(PitchNet.PlayerLaneAttribute)
+			and localPlayer:GetAttribute("BattingMode") == "Batting"
+		then
 			activate(laneId)
 		end
 	end)
@@ -228,6 +237,17 @@ function BattingCamera.start()
 		occlusionParams = nil
 	end)
 	refresh()
+end
+
+function BattingCamera.isFreeRoamReady(): boolean
+	local camera = Workspace.CurrentCamera
+	local character = localPlayer.Character
+	local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+	return not bound
+		and camera ~= nil
+		and camera.CameraType == Enum.CameraType.Custom
+		and humanoid ~= nil
+		and camera.CameraSubject == humanoid
 end
 
 -- Additional transform applied on top of the shown pose (nudges).

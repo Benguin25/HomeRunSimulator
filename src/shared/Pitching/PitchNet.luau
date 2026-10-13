@@ -26,6 +26,9 @@ PitchNet.LaneAttributes = {
 	PitcherGround = "PitcherGround",
 	ReleasePoint = "ReleasePoint", -- only set when an explicit release marker exists
 	BatterGround = "BatterGround",
+	BatterSide = "BatterSide",
+	RightBatterGround = "RightBatterGround",
+	LeftBatterGround = "LeftBatterGround",
 	-- Optional field markers (batted-ball foul lines); only set when found.
 	LeftFoulPole = "LeftFoulPole",
 	RightFoulPole = "RightFoulPole",

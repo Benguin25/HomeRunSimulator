@@ -15,6 +15,8 @@ local CameraMath = require(Shared.Presentation.CameraMath)
 local Controller = require(script.Parent.GameplayController)
 local BattingCamera = require(script.Parent.BattingCamera)
 local PitchDebugView = require(script.Parent.PitchDebugView)
+local Input = require(script.Parent.InputCoordinator)
+local Audio = require(script.Parent.GameAudio)
 local Hud = {}
 local COLORS = require(script.Parent.HudStyle).Colors
 local gui: ScreenGui
@@ -35,6 +37,10 @@ local rows: { [string]: TextLabel } = {}
 local displayed: { [string]: number } = {}
 local snapshot: Net.Snapshot? = nil
 local open = false
+local function setOpen(value: boolean)
+	open = value
+	Input.menu("Stats", value)
+end
 local panelAlpha = 0
 local noticeAt = -math.huge
 local noticeDuration = 0
@@ -98,13 +104,22 @@ local function updated(value: Net.Snapshot)
 	Replica.apply(notices, value)
 	local award = value.stats.award
 	local celebration = Replica.celebration(notices)
-	if value.loop and (value.loop.phase == "Returning" or value.loop.presentationSkipped
-		or Controller.wasSkipped(value.loop.laneId, value.loop.pitchId)) then
+	if
+		value.loop
+		and (
+			value.loop.phase == "Returning"
+			or value.loop.presentationSkipped
+			or Controller.wasSkipped(value.loop.laneId, value.loop.pitchId)
+		)
+	then
 		noticeAt = -math.huge -- an approved skip dismisses presentation, never the record
 		return
 	end
 	if not award or celebration == nil then
 		return
+	end
+	if award.newRecord and not award.baseline then
+		Audio.play("Best")
 	end
 	noticeAt, noticeIntensity = os.clock(), award.intensity
 	noticeDuration = if award.baseline then Config.Hud.BaselineNoticeSeconds else Config.Hud.NoticeSeconds
@@ -124,7 +139,7 @@ local function debug(loop: Net.Loop?, stats: Stats.Snapshot?, now: number)
 		return
 	end
 	lastDebugAt = now
-	local state = if loop then loop.phase else "Waiting for lane"
+	local state = if loop then loop.phase else "Free roam"
 	PitchDebugView.setSection(
 		"Gameplay",
 		string.format(
@@ -154,12 +169,11 @@ local function render(dt: number)
 	end
 	local v = snapshot and snapshot.stats
 	local loop = snapshot and snapshot.loop
-	local batting = BattingCamera.isBattingView()
-	if not batting then
-		open = false
-	end
 	local hiddenForDebug = PitchDebugView.isVisible()
-	main.Visible = not hiddenForDebug and (batting or view.X >= Config.Hud.CompactWidth)
+	if hiddenForDebug then
+		setOpen(false)
+	end
+	main.Visible = not hiddenForDebug
 	if v then
 		for _, key in
 			{
@@ -207,7 +221,8 @@ local function render(dt: number)
 	local canSkip, waiting = Controller.canSkip(), Controller.isWaiting()
 	skip.Visible = (canSkip or waiting) and not hiddenForDebug
 	skip.Active = canSkip
-	skip.Text = if waiting then "WAITING FOR HIT RESULT..."
+	skip.Text = if waiting
+		then "WAITING FOR HIT RESULT..."
 		elseif BattingCamera.getDirector():getState() == "Landing" then `SKIP RESULT [{Config.Hud.SkipKey}]`
 		else `SKIP FLIGHT [{Config.Hud.SkipKey}]`
 	skip.TextColor3 = if waiting then COLORS.muted else COLORS.text
@@ -235,16 +250,14 @@ function Hud.start()
 	fill.Parent = track
 	local toggle = button(main, `STATS [{Config.Hud.StatsKey}]`, UDim2.new(1, -84, 0, 12), UDim2.fromOffset(70, 27))
 	toggle.Activated:Connect(function()
-		if BattingCamera.isBattingView() then
-			open = not open
-		end
+		setOpen(not open)
 	end)
 	details = panel("SessionStatistics", 268, 326, UDim2.new(1, -16, 1, -150))
 	details.Active = true
 	text(details, "THIS SESSION", UDim2.fromOffset(14, 12), UDim2.fromOffset(200, 20), 14, COLORS.text).Font =
 		Enum.Font.GothamBold
 	button(details, "X", UDim2.new(1, -36, 0, 8), UDim2.fromOffset(26, 26)).Activated:Connect(function()
-		open = false
+		setOpen(false)
 	end)
 	local definitions = {
 		{ "longestMeters", "Longest fair carry" },
@@ -290,10 +303,10 @@ function Hud.start()
 		if processed or UserInputService:GetFocusedTextBox() ~= nil then
 			return
 		end
-		if input.KeyCode == (Enum.KeyCode :: any)[Config.Hud.StatsKey] and BattingCamera.isBattingView() then
-			open = not open
+		if input.KeyCode == (Enum.KeyCode :: any)[Config.Hud.StatsKey] then
+			setOpen(not open)
 		elseif input.KeyCode == Enum.KeyCode.Escape then
-			open = false
+			setOpen(false)
 		end
 	end)
 	RunService:BindToRenderStep("GameplayHud", Enum.RenderPriority.Camera.Value + 7, render)

@@ -43,8 +43,7 @@ local BattingDebugView = require(script.Parent.BattingDebugView)
 local BattingPresentation = require(script.Parent.BattingPresentation)
 local CharacterGrip = require(script.Parent.CharacterGrip)
 local PitchVisualController = require(script.Parent.PitchVisualController)
-local ProgressionController = require(script.Parent.ProgressionController)
-local WorldController = require(script.Parent.WorldController)
+local Input = require(script.Parent.InputCoordinator)
 
 local BattingController = {}
 
@@ -190,7 +189,7 @@ local function onRender(dt: number)
 		return
 	end
 	local now = serverNow()
-	local aimVisible = BattingCamera.isAimVisible()
+	local aimVisible = BattingCamera.isAimVisible() and Input.canAim()
 	BattingPresentation.setAimVisible(aimVisible)
 	if aimVisible then
 		updateAim(dt)
@@ -202,7 +201,11 @@ local function onRender(dt: number)
 	CharacterGrip.ensureBound(localPlayer.Character)
 	local activeSwing = currentSwing
 	local swinging = activeSwing ~= nil and not SwingModel.isReadyAt(activeSwing, now)
-	CharacterGrip.step(geo, if swinging and activeSwing then activeSwing.pivot else SwingModel.pivotFor(geo, aimX, aimY), dt)
+	CharacterGrip.step(
+		geo,
+		if swinging and activeSwing then activeSwing.pivot else SwingModel.pivotFor(geo, aimX, aimY),
+		dt
+	)
 	local anchor = CharacterGrip.getAnchor(geo) or BatStance.fallbackAnchor(geo)
 	local length = SwingModel.dimensions(geo).length
 	local restTarget = BatStance.readyPose(geo, anchor, aimX, aimY)
@@ -222,11 +225,20 @@ local function onRender(dt: number)
 
 	updatePending(now)
 	BattingPresentation.update()
-	BattingDebugView.updateLive(geo, phase, aimX, aimY, aimClamped, if BattingDebugView.isEnabled() then CharacterGrip.describe(geo) else nil)
+	BattingDebugView.updateLive(
+		geo,
+		phase,
+		aimX,
+		aimY,
+		aimClamped,
+		if BattingDebugView.isEnabled() then CharacterGrip.describe(geo) else nil
+	)
 end
 
 local function trySwing()
-	if ProgressionController.isOpen() or WorldController.isOpen() then return end
+	if not Input.canSwing() then
+		return
+	end
 	local geo = geometry
 	local lane = laneId
 	if not active or not geo or not lane or not aimInitialized or not BattingCamera.isBattingView() then
@@ -333,15 +345,12 @@ local function setActive(value: boolean)
 		CharacterGrip.release()
 	end
 	BattingPresentation.setVisible(value)
-	if BattingConfig.Presentation.HideSystemCursor then
-		UserInputService.MouseIconEnabled = not value
-	end
 end
 
 local function refresh()
 	local id = localPlayer:GetAttribute(PitchNet.PlayerLaneAttribute)
 	local geo = if typeof(id) == "string" then PitchVisualController.getGeometry(id) else nil
-	if typeof(id) == "string" and geo then
+	if typeof(id) == "string" and geo and localPlayer:GetAttribute("BattingMode") == "Batting" then
 		local changed = geometry ~= geo
 		laneId = id
 		geometry = geo
@@ -357,6 +366,9 @@ local function refresh()
 	else
 		laneId = nil
 		geometry = nil
+		table.clear(pending)
+		currentSwing, readyPose, swingFromPose = nil, nil, nil
+		aimInitialized, swungPitchId = false, nil
 		setActive(false)
 	end
 end
@@ -379,6 +391,7 @@ function BattingController.start()
 	resultEvent.OnClientEvent:Connect(onSwingResult)
 
 	localPlayer:GetAttributeChangedSignal(PitchNet.PlayerLaneAttribute):Connect(refresh)
+	localPlayer:GetAttributeChangedSignal("BattingMode"):Connect(refresh)
 	PitchVisualController.onGeometry(function(changedLaneId)
 		if changedLaneId == localPlayer:GetAttribute(PitchNet.PlayerLaneAttribute) then
 			refresh()

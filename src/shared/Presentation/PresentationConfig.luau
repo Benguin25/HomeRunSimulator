@@ -222,17 +222,24 @@ PresentationConfig.Hud = {
 -- (content/sounds). Replace them with real assets: a wood bat crack (3 tiers),
 -- a ball whoosh loop, a grass thud, a wall knock and a UI tick. Empty id = off.
 PresentationConfig.Sounds = {
-	MasterVolume = 1,
+	MasterVolume = 0.65,
+	MaxConcurrent = 3,
 	MinGapSeconds = 0.08, -- the same sound never restarts faster than this
 	Weak = { Id = "rbxasset://sounds/action_jump_land.mp3", Volume = 0.45, Speed = 1.55 },
 	Solid = { Id = "rbxasset://sounds/action_jump_land.mp3", Volume = 0.8, Speed = 1.9 },
 	Crushed = { Id = "rbxasset://sounds/action_jump_land.mp3", Volume = 1, Speed = 2.1 },
 	-- Layered under Crushed for weight.
-	CrushedLayer = { Id = "rbxasset://sounds/impact_explosion_03.mp3", Volume = 0.22, Speed = 1.6 },
+	CrushedLayer = { Id = "", Volume = 0.15, Speed = 1.6 },
 	Whoosh = { Id = "", Volume = 0.3, Speed = 1 }, -- looped on the ball while it flies (no placeholder)
 	Landing = { Id = "rbxasset://sounds/action_jump_land.mp3", Volume = 0.35, Speed = 0.8 },
 	Wall = { Id = "rbxasset://sounds/action_jump_land.mp3", Volume = 0.55, Speed = 0.6 },
 	Result = { Id = "rbxasset://sounds/volume_slider.ogg", Volume = 0.35, Speed = 1.15 },
+	Pitch = { Id = "rbxasset://sounds/action_jump.mp3", Volume = 0.12, Speed = 1.65 },
+	Swing = { Id = "rbxasset://sounds/action_jump.mp3", Volume = 0.25, Speed = 0.85 },
+	Miss = { Id = "", Volume = 0.12, Speed = 1 },
+	Best = { Id = "rbxasset://sounds/volume_slider.ogg", Volume = 0.4, Speed = 1.35 },
+	Upgrade = { Id = "rbxasset://sounds/volume_slider.ogg", Volume = 0.3, Speed = 1.55 },
+	Rebirth = { Id = "rbxasset://sounds/volume_slider.ogg", Volume = 0.45, Speed = 0.9 },
 }
 
 return PresentationConfig

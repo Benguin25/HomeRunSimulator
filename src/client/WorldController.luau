@@ -3,6 +3,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Data = require(ReplicatedStorage:WaitForChild("Shared").Progression.PlayerProgression)
 local Progression = require(script.Parent.ProgressionController)
 local Controller = {}
+local Input = require(script.Parent.InputCoordinator)
 local opened, pending, started = false, false, false
 local travel: RemoteFunction
 local sequence = 0
@@ -12,6 +13,7 @@ function Controller.isOpen(): boolean
 end
 function Controller.setOpen(value: boolean)
 	opened = value
+	Input.menu("Worlds", value)
 	if value then
 		Progression.setOpen(false)
 	end
@@ -35,7 +37,7 @@ function Controller.go(worldId: string, callback: (boolean, string) -> ())
 		if ok and response and result then
 			Progression.accept(response)
 			if result.ok then
-				opened = false
+				Controller.setOpen(false)
 			end
 			callback(result.ok, result.reason)
 		else

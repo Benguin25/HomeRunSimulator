@@ -42,7 +42,9 @@ function Controller.wasSkipped(laneId: string, pitchId: number): boolean
 end
 function Controller.isWaiting(): boolean
 	local loop = state.value and state.value.loop
-	return loop ~= nil and loop.phase == "Flying" and BattingCamera.isReady()
+	return loop ~= nil
+		and loop.phase == "Flying"
+		and BattingCamera.isReady()
 		and (loop.presentationSkipped == true or Controller.wasSkipped(loop.laneId, loop.pitchId))
 end
 function Controller.skip()
@@ -82,7 +84,11 @@ local function update()
 	if skip then
 		if skip.laneId ~= loop.laneId then
 			pendingSkip = nil
-		elseif loop.pitchId == skip.pitchId and loop.characterReady and (loop.phase == "Flying" or loop.phase == "Resolved") then
+		elseif
+			loop.pitchId == skip.pitchId
+			and loop.characterReady
+			and (loop.phase == "Flying" or loop.phase == "Resolved")
+		then
 			if skip.epoch ~= loop.epoch then
 				skip.epoch, skip.lastSent = loop.epoch, -math.huge
 			end
@@ -97,7 +103,9 @@ local function update()
 		and not loop.cameraReady
 		and loop.characterReady
 		and now >= loop.notBefore
-		and BattingCamera.isReady()
+		and (BattingCamera.isReady() or (Players.LocalPlayer:GetAttribute("BattingMode") == "FreeRoam" and Players.LocalPlayer:GetAttribute(
+			"BattingExitPending"
+		) == true and BattingCamera.isFreeRoamReady()))
 		and BattingController.isSwingReady()
 		and now - lastReadyAt >= Config.Pacing.ReadyRetrySeconds
 	then
@@ -131,11 +139,19 @@ function Controller.start()
 	local ok, key = pcall(function()
 		return (Enum.KeyCode :: any)[Config.Hud.SkipKey]
 	end)
-	if ok and key ~= Enum.KeyCode.None and ActionInput.distinct(Config.Hud.SkipKey,
-		{ Config.Hud.StatsKey, PitchConfig.Debug.ToggleKey, PreviewConfig.ToggleKey }) then
-		Binding.bind("HomeRunSkipPresentation", key, Config.Hud.SkipInputPriority,
-			function() return Controller.canSkip() or BattingCamera.getDirector():getState() == "Returning" or Controller.isWaiting() end,
-			Controller.skip)
+	if
+		ok
+		and key ~= Enum.KeyCode.None
+		and ActionInput.distinct(
+			Config.Hud.SkipKey,
+			{ Config.Hud.StatsKey, PitchConfig.Debug.ToggleKey, PreviewConfig.ToggleKey }
+		)
+	then
+		Binding.bind("HomeRunSkipPresentation", key, Config.Hud.SkipInputPriority, function()
+			return Controller.canSkip()
+				or BattingCamera.getDirector():getState() == "Returning"
+				or Controller.isWaiting()
+		end, Controller.skip)
 	else
 		warn("[Gameplay] Invalid/conflicting skip key; use the skip button.")
 	end

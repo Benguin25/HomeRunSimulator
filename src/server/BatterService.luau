@@ -1,255 +1,356 @@
 --!strict
--- Assigns players to batting lanes, places their character at the batter
--- marker, and starts/stops the lane's pitching as the batter spawns, dies or
--- leaves. Players beyond the number of lanes wait in a queue.
-
+-- Explicit lane reservation; free roam never consumes batting capacity.
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-
-local Pitching = ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Pitching")
-local PitchConfig = require(Pitching.PitchConfig)
-local PitchNet = require(Pitching.PitchNet)
-
+local RunService = game:GetService("RunService")
+local Workspace = game:GetService("Workspace")
+local Shared = ReplicatedStorage:WaitForChild("Shared")
+local PitchConfig = require(Shared.Pitching.PitchConfig)
+local PitchNet = require(Shared.Pitching.PitchNet)
+local Geometry = require(Shared.Pitching.LaneGeometry)
+local Config = require(Shared.Gameplay.BattingModeConfig)
+local Rules = require(Shared.Gameplay.BattingModeRules)
 local BattedBallServer = require(script.Parent.BattedBallServer)
 local PitchServer = require(script.Parent.PitchServer)
 local GameplayServer = require(script.Parent.GameplayServer)
-
 local ProgressionServer = require(script.Parent.ProgressionServer)
 local Worlds = require(script.Parent.Worlds.WorldRegistry)
-local Selection = require(ReplicatedStorage.Shared.Worlds.LaneSelection)
-local BatterService = {}
+local Boxes = require(script.Parent.BatterBoxes)
+local Movement = require(Shared.Gameplay.BattingMovement)
+local Service = {}
+type State = {
+	lane: string?,
+	epoch: number,
+	leaving: boolean,
+	guard: Rules.Guard,
+	promptAt: number,
+	movement: Movement.Saved?,
+	connections: { RBXScriptConnection },
+	characterConnections: { RBXScriptConnection },
+}
+local states: { [Player]: State } = {}
+local owners: { [string]: Player? } = {}
+local epoch = 0
+local notice: RemoteEvent
 
-local laneBatter: { [string]: Player } = {}
-local waiting: { Player } = {}
-local playerConnections: { [Player]: { RBXScriptConnection } } = {}
-local characterConnections: { [Player]: { RBXScriptConnection } } = {}
-
-local function disconnectAll(list: { RBXScriptConnection }?)
-	if list then
-		for _, connection in list do
-			connection:Disconnect()
-		end
-		table.clear(list)
+local function disconnect(list: { RBXScriptConnection })
+	for _, connection in list do
+		connection:Disconnect()
 	end
+	table.clear(list)
 end
-
-local function getLaneOf(player: Player): string?
-	for laneId, batter in laneBatter do
-		if batter == player then
-			return laneId
-		end
+local function living(player: Player): (Model?, Humanoid?, BasePart?)
+	local character = player.Character
+	local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+	local root = character and character:FindFirstChild("HumanoidRootPart")
+	if
+		not character
+		or not character.Parent
+		or not humanoid
+		or humanoid.Health <= 0
+		or not root
+		or not root:IsA("BasePart")
+	then
+		return nil, nil, nil
 	end
-	return nil
+	return character, humanoid, root
 end
-
-local function placeCharacter(laneId: string, character: Model)
-	local geometry = PitchServer.getGeometry(laneId)
-	local humanoid = character:FindFirstChildOfClass("Humanoid")
-	local root = character:FindFirstChild("HumanoidRootPart")
-	if not geometry or not humanoid or not root or not root:IsA("BasePart") then
+local function notify(player: Player, reason: string)
+	notice:FireClient(player, reason)
+end
+local function restore(state: State)
+	local m = state.movement
+	state.movement = nil
+	if not m then
 		return
 	end
-
-	-- R15: root center sits HipHeight + half the root's height above the ground.
-	local rootHeight = if humanoid.RigType == Enum.HumanoidRigType.R15
+	Movement.restore(m)
+end
+local function groundCFrame(player: Player, cf: CFrame)
+	local character, humanoid, root = living(player)
+	if not character or not humanoid or not root then
+		return
+	end
+	local height = if humanoid.RigType == Enum.HumanoidRigType.R15
 		then humanoid.HipHeight + root.Size.Y / 2
 		else PitchConfig.Batter.HeightAboveMarkerStuds
-	character:PivotTo(geometry.batterCFrame + Vector3.new(0, rootHeight, 0))
-
-	if PitchConfig.Batter.LockMovement then
-		humanoid.WalkSpeed = 0
-		humanoid.UseJumpPower = true
-		humanoid.JumpPower = 0
-		humanoid.AutoRotate = false
-		root.Anchored = true
+	character:PivotTo(cf + Vector3.new(0, height, 0))
+	root.AssemblyLinearVelocity, root.AssemblyAngularVelocity = Vector3.zero, Vector3.zero
+end
+local function spawnRoam(player: Player)
+	if not ProgressionServer.ready(player) then
+		return
+	end
+	local world = ProgressionServer.world(player)
+	local cf = Boxes.spawn(world)
+	if cf then
+		groundCFrame(player, cf)
 	end
 end
-
-local function onCharacterAdded(player: Player, character: Model)
-	disconnectAll(characterConnections[player])
-	local laneId = getLaneOf(player)
-	if not laneId then
+local function finishExit(player: Player, state: State, moveOutside: boolean)
+	local lane = state.lane
+	if not lane then
 		return
 	end
-
-	local humanoid = character:WaitForChild("Humanoid", 10)
-	local root = character:WaitForChild("HumanoidRootPart", 10)
-	if
-		not humanoid
-		or not root
-		or character.Parent == nil
-		or player.Character ~= character
-		or getLaneOf(player) ~= laneId
-	then
-		return
-	end
-	assert(humanoid:IsA("Humanoid"))
-
-	-- Defer so the default spawn placement has finished before we move the character.
-	task.defer(function()
-		if player.Character ~= character or getLaneOf(player) ~= laneId then
-			return
+	-- Never release an authoritative hit through an entry/exit/travel request.
+	assert(Rules.canRelease(BattedBallServer.getActiveHit(lane) ~= nil))
+	PitchServer.stopLane(lane, "LeftBatting")
+	PitchServer.setBatter(lane, nil)
+	GameplayServer.release(player, lane)
+	owners[lane], state.lane, state.leaving = nil, nil, false
+	restore(state)
+	player:SetAttribute(Config.ModeAttribute, "FreeRoam")
+	player:SetAttribute(Config.ExitAttribute, false)
+	player:SetAttribute(PitchNet.PlayerLaneAttribute, nil)
+	if moveOutside then
+		local geo = PitchServer.getGeometry(lane)
+		if geo then
+			local p = geo.batterCFrame.Position - geo.toPitcher * geo.units.toStuds(Config.ExitBackMeters)
+			groundCFrame(player, CFrame.lookAt(p, p + geo.toPitcher))
 		end
-		placeCharacter(laneId, character)
-		GameplayServer.character(player, laneId, true)
-		PitchServer.startLane(laneId)
-	end)
-
-	characterConnections[player] = {
-		humanoid.Died:Connect(function()
-			if getLaneOf(player) == laneId then
-				GameplayServer.character(player, laneId, false)
-				PitchServer.stopLane(laneId, "BatterDied")
-			end
-		end),
-	}
+	end
+	GameplayServer.publish(player)
 end
 
-local function assignLane(player: Player, laneId: string)
-	laneBatter[laneId] = player
+function Service.enter(player: Player, laneId: any, side: any): (boolean, string)
+	local state = states[player]
+	if not state then
+		return false, "UnknownPlayer"
+	end
+	local now = Workspace:GetServerTimeNow()
+	local elapsed = now - state.promptAt
+	state.promptAt = now
+	if elapsed < Config.RequestGapSeconds then
+		return false, "RateLimited"
+	end
+	local character, humanoid, root = living(player)
+	local geo = if typeof(laneId) == "string" then PitchServer.getGeometry(laneId) else nil
+	if not geo then
+		return false, "UnknownLane"
+	end
+	local validSide = side == "Right" or side == "Left"
+	local point = if validSide then Geometry.boxGround(geo, side) else geo.plateGround
+	local reason = Rules.entry({
+		profileReady = ProgressionServer.ready(player),
+		characterReady = character ~= nil,
+		assigned = state.lane ~= nil,
+		sameWorld = Worlds.worldForLane(laneId) == ProgressionServer.world(player),
+		laneAvailable = owners[laneId] == nil and BattedBallServer.getActiveHit(laneId) == nil,
+		distance = if root then (root.Position - point).Magnitude else math.huge,
+		side = side,
+	})
+	if reason then
+		return false, reason
+	end
+	assert(character and humanoid and root, "entry validated character")
+	-- No yields from validation to reservation/readiness initialization.
+	epoch += 1
+	state.epoch, state.lane, owners[laneId] = epoch, laneId, player
+	local movement = Movement.capture(humanoid, root)
+	state.movement = movement
+	PitchServer.selectBox(laneId, side)
+	geo = assert(PitchServer.getGeometry(laneId))
+	groundCFrame(player, geo.batterCFrame)
+	Movement.lock(movement)
+	player:SetAttribute(Config.EpochAttribute, epoch)
+	player:SetAttribute(Config.ExitAttribute, false)
+	player:SetAttribute(Config.ModeAttribute, "Batting")
 	player:SetAttribute(PitchNet.PlayerLaneAttribute, laneId)
 	PitchServer.setBatter(laneId, player.UserId)
 	GameplayServer.assign(player, laneId)
-	local character = player.Character
-	if character then
-		task.spawn(onCharacterAdded, player, character)
-	end
+	GameplayServer.character(player, laneId, true)
+	PitchServer.startLane(laneId) -- canStartPitch still requires validated camera readiness
+	return true, "Entered"
 end
 
-local function tryAssign(player: Player): boolean
-	if not ProgressionServer.ready(player) then
-		return false
+function Service.exit(player: Player, sequence: any, expectedLane: any, expectedEpoch: any): (boolean, string)
+	local state = states[player]
+	if not state then
+		return false, "UnknownPlayer"
 	end
-	local laneId =
-		Selection.free(PitchServer.getLaneIds(), laneBatter, Worlds.worldForLane, ProgressionServer.world(player))
-	if not laneId then
-		return false
+	local rejection = Rules.request(state.guard, Workspace:GetServerTimeNow(), sequence)
+		or Rules.exit(
+			state.lane ~= nil and state.lane == expectedLane and owners[state.lane :: string] == player,
+			expectedEpoch,
+			state.epoch,
+			state.leaving
+		)
+	if rejection then
+		return false, rejection
 	end
-	assignLane(player, laneId)
-	return true
+	local lane = assert(state.lane, "exit validated assignment")
+	state.leaving = true
+	player:SetAttribute(Config.ExitAttribute, true)
+	PitchServer.stopLane(lane, "ExitRequested")
+	if Rules.canRelease(BattedBallServer.getActiveHit(lane) ~= nil) then
+		finishExit(player, state, true)
+		return true, "Exited"
+	end
+	return true, "FinishingHit"
 end
 
-local function drainWaiting()
-	local index = 1
-	while index <= #waiting do
-		local player = waiting[index]
-		if not player.Parent or tryAssign(player) then
-			table.remove(waiting, index)
-		else
-			index += 1
+local function characterAdded(player: Player, character: Model)
+	local state = states[player]
+	if not state then
+		return
+	end
+	disconnect(state.characterConnections)
+	local humanoid = character:WaitForChild("Humanoid", 10)
+	local root = character:WaitForChild("HumanoidRootPart", 10)
+	if player.Character ~= character or not character.Parent or not humanoid or not root then
+		return
+	end
+	assert(humanoid:IsA("Humanoid"))
+	task.defer(function()
+		if player.Character ~= character or not states[player] then
+			return
 		end
-	end
-end
-local function onPlayerAdded(player: Player)
-	playerConnections[player] = {
-		player:GetAttributeChangedSignal("ProfileState"):Connect(function()
-			if ProgressionServer.ready(player) and not getLaneOf(player) then
-				player:SetAttribute("CurrentWorld", ProgressionServer.world(player))
-				Worlds.visibility(player, nil, ProgressionServer.world(player))
-				drainWaiting()
-			end
-		end),
-		player.CharacterAdded:Connect(function(character)
-			onCharacterAdded(player, character)
-		end),
-		player.CharacterRemoving:Connect(function()
-			disconnectAll(characterConnections[player])
-			local laneId = getLaneOf(player)
-			if laneId then
-				GameplayServer.character(player, laneId, false)
-				PitchServer.stopLane(laneId, "CharacterRemoved")
+		player:SetAttribute(Config.ModeAttribute, "FreeRoam")
+		spawnRoam(player)
+		if state.lane then
+			-- Death/reset retains only the pending result reservation, never the stance.
+			state.leaving = true
+			player:SetAttribute(Config.ExitAttribute, true)
+			GameplayServer.character(player, state.lane, true)
+		end
+	end)
+	state.characterConnections = {
+		humanoid.Died:Connect(function()
+			if state.lane then
+				state.leaving = true
+				player:SetAttribute(Config.ExitAttribute, true)
+				player:SetAttribute(Config.ModeAttribute, "FreeRoam")
+				PitchServer.stopLane(state.lane, "BatterDied")
+				GameplayServer.character(player, state.lane, false)
+				restore(state)
+				if Rules.canRelease(BattedBallServer.getActiveHit(state.lane) ~= nil) then
+					finishExit(player, state, false)
+				end
 			end
 		end),
 	}
-	player:SetAttribute("CurrentWorld", ProgressionServer.world(player))
-	Worlds.visibility(player, nil, ProgressionServer.world(player))
-	if not tryAssign(player) then
-		table.insert(waiting, player)
+end
+local function added(player: Player)
+	local state: State = {
+		lane = nil,
+		epoch = 0,
+		leaving = false,
+		guard = Rules.new(),
+		promptAt = -math.huge,
+		movement = nil,
+		connections = {},
+		characterConnections = {},
+	}
+	states[player] = state
+	player:SetAttribute(Config.ModeAttribute, "FreeRoam")
+	player:SetAttribute(Config.ExitAttribute, false)
+	player:SetAttribute(PitchNet.PlayerLaneAttribute, nil)
+	local function profileReady()
+		if ProgressionServer.ready(player) and not state.lane then
+			local previous = player:GetAttribute("CurrentWorld")
+			local world = ProgressionServer.world(player)
+			Worlds.visibility(player, if typeof(previous) == "string" then previous else nil, world)
+			player:SetAttribute("CurrentWorld", world)
+			spawnRoam(player)
+		end
+	end
+	state.connections = {
+		player:GetAttributeChangedSignal("ProfileState"):Connect(profileReady),
+		player.CharacterAdded:Connect(function(character)
+			characterAdded(player, character)
+		end),
+		player.CharacterRemoving:Connect(function()
+			disconnect(state.characterConnections)
+			if state.lane then
+				state.leaving = true
+				player:SetAttribute(Config.ExitAttribute, true)
+				player:SetAttribute(Config.ModeAttribute, "FreeRoam")
+				PitchServer.stopLane(state.lane, "CharacterRemoved")
+				GameplayServer.character(player, state.lane, false)
+				restore(state)
+				if Rules.canRelease(BattedBallServer.getActiveHit(state.lane) ~= nil) then
+					finishExit(player, state, false)
+				end
+			end
+		end),
+	}
+	profileReady()
+	if player.Character then
+		task.spawn(characterAdded, player, player.Character)
 	end
 end
-
-local function onPlayerRemoving(player: Player)
-	disconnectAll(playerConnections[player])
-	disconnectAll(characterConnections[player])
-	playerConnections[player] = nil
-	characterConnections[player] = nil
-
-	local index = table.find(waiting, player)
-	if index then
-		table.remove(waiting, index)
+local function removing(player: Player)
+	local state = states[player]
+	if not state then
+		return
 	end
-
-	local laneId = getLaneOf(player)
-	if laneId then
-		laneBatter[laneId] = nil
-		-- A ball in the air is abandoned with its batter. (A reset or death keeps
-		-- it: the outcome is already determined, and the lane stays paused
-		-- until it resolves, so the respawned batter never faces a pitch mid-flight.)
-		BattedBallServer.cancelLane(laneId, "BatterLeft")
-		PitchServer.stopLane(laneId, "BatterLeft")
-		PitchServer.setBatter(laneId, nil)
-		GameplayServer.release(player, laneId)
-		drainWaiting()
+	disconnect(state.connections)
+	disconnect(state.characterConnections)
+	restore(state)
+	local lane = state.lane
+	if lane then
+		-- Disconnect retains the existing abandoned-hit policy.
+		BattedBallServer.cancelLane(lane, "BatterLeft")
+		PitchServer.stopLane(lane, "BatterLeft")
+		PitchServer.setBatter(lane, nil)
+		GameplayServer.release(player, lane)
+		owners[lane] = nil
 	end
+	states[player] = nil
 end
 
--- Non-yielding transaction: select destination first; never abandon a hit.
-function BatterService.travel(player: Player, target: any, sequence: any, expectedWorld: any)
-	local oldLane = getLaneOf(player)
-	local destination: string? = nil
-	if typeof(target) == "string" then
-		destination = Selection.free(PitchServer.getLaneIds(), laneBatter, Worlds.worldForLane, target)
-	end
-	local character = player.Character
-	local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+function Service.travel(player: Player, target: any, sequence: any, expectedWorld: any)
+	local state = states[player]
+	local lane = state and state.lane
+	local character = living(player)
 	local previous = ProgressionServer.world(player)
 	local result = ProgressionServer.travel(player, target, sequence, expectedWorld, {
-		characterReady = character ~= nil
-			and character.Parent ~= nil
-			and humanoid ~= nil
-			and humanoid.Health > 0
-			and character:FindFirstChild("HumanoidRootPart") ~= nil,
-		hitBusy = oldLane ~= nil and BattedBallServer.getActiveHit(oldLane) ~= nil,
-		returnReady = oldLane == nil or GameplayServer.travelReady(player, oldLane),
-		laneAvailable = destination ~= nil,
+		characterReady = character ~= nil,
+		hitBusy = lane ~= nil and BattedBallServer.getActiveHit(lane) ~= nil,
+		returnReady = lane == nil or GameplayServer.travelReady(player, lane),
+		-- Free roam has no batting capacity requirement, even if all boxes are occupied.
+		laneAvailable = typeof(target) == "string" and Boxes.spawn(target) ~= nil,
 	})
 	if result.ok then
-		assert(destination, "travel reserved a destination")
-		disconnectAll(characterConnections[player])
-		if oldLane then
-			PitchServer.stopLane(oldLane, "WorldTravel")
-			PitchServer.setBatter(oldLane, nil)
-			GameplayServer.release(player, oldLane)
-			laneBatter[oldLane] = nil
-		end
-		local index = table.find(waiting, player)
-		if index then
-			table.remove(waiting, index)
+		if state and lane then
+			finishExit(player, state, false)
 		end
 		Worlds.visibility(player, previous, target)
 		player:SetAttribute("CurrentWorld", target)
-		assignLane(player, destination)
-		-- Place synchronously; character readiness/start is deferred and lane-guarded.
-		if character then
-			placeCharacter(destination, character)
-		end
+		player:SetAttribute(Config.ModeAttribute, "FreeRoam")
+		spawnRoam(player)
 		ProgressionServer.publish(player)
-		drainWaiting()
 	end
 	return ProgressionServer.snapshot(player), result
 end
-function BatterService.start()
+function Service.start()
 	local runtime = Instance.new("Folder")
 	runtime.Name = "WorldRuntime"
 	local travel = Instance.new("RemoteFunction")
 	travel.Name, travel.Parent = "Travel", runtime
-	travel.OnServerInvoke = BatterService.travel
+	travel.OnServerInvoke = Service.travel
+	local exit = Instance.new("RemoteFunction")
+	exit.Name, exit.Parent = "ExitBatting", runtime
+	exit.OnServerInvoke = Service.exit
+	notice = Instance.new("RemoteEvent")
+	notice.Name, notice.Parent = "BattingNotice", runtime
 	runtime.Parent = ReplicatedStorage
-	Players.PlayerAdded:Connect(onPlayerAdded)
-	Players.PlayerRemoving:Connect(onPlayerRemoving)
+	Boxes.create(function(player, lane, side)
+		local _, reason = Service.enter(player, lane, side)
+		notify(player, reason)
+	end)
+	Players.PlayerAdded:Connect(added)
+	Players.PlayerRemoving:Connect(removing)
 	for _, player in Players:GetPlayers() do
-		task.spawn(onPlayerAdded, player)
+		task.spawn(added, player)
 	end
+	RunService.Heartbeat:Connect(function()
+		for player, state in states do
+			local lane = state.lane
+			if lane and state.leaving and Rules.canRelease(BattedBallServer.getActiveHit(lane) ~= nil) then
+				finishExit(player, state, player:GetAttribute(Config.ModeAttribute) == "Batting")
+			end
+		end
+	end)
 end
-
-return BatterService
+return Service

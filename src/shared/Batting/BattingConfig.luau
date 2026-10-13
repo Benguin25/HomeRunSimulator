@@ -210,15 +210,9 @@ BattingConfig.Presentation = {
 	ShowBarrelLine = true, -- thin line showing the barrel's reach at the aim height
 	ShowZoneOutline = true,
 	ZoneOutlineTransparency = 0.75,
-	HideSystemCursor = true,
 	LabelSeconds = 0.9,
-	-- Placeholder sounds from Studio's built-in content. Swap for real assets.
-	SwingSoundId = "rbxasset://sounds/action_jump.mp3",
-	SwingSoundSpeed = 1.5,
-	-- (Contact sounds, the impact burst and the camera impulse moved to
-	-- Presentation/PresentationConfig in Stage 4: Sounds, Impact, Shake.)
-	MissSoundId = "rbxasset://sounds/action_jump.mp3",
-	MissSoundSpeed = 0.75,
+	-- Stage 7A cursor policy is InputCoordinator; all audio IDs/gain/speed
+	-- live in PresentationConfig.Sounds and play through GameAudio.
 	ContactMarkerSeconds = 1.5,
 	-- (The Phase 2 TemporaryDeflection stand-in was replaced by the Phase 3A
 	-- batted-ball flight: see BattedBall/BattedBallConfig.)

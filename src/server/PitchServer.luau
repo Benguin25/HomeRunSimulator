@@ -108,6 +108,9 @@ local function createLane(resolved: MarkerResolver.ResolvedLane, lanesFolder: Fo
 	folder:SetAttribute(attrs.PitcherGround, resolved.inputs.pitcherGround)
 	folder:SetAttribute(attrs.ReleasePoint, resolved.inputs.releasePoint)
 	folder:SetAttribute(attrs.BatterGround, resolved.inputs.batterGround)
+	folder:SetAttribute(attrs.RightBatterGround, resolved.inputs.rightBatterGround)
+	folder:SetAttribute(attrs.LeftBatterGround, resolved.inputs.leftBatterGround)
+	folder:SetAttribute(attrs.BatterSide, "Right")
 	folder:SetAttribute(attrs.LeftFoulPole, resolved.inputs.leftFoulPole)
 	folder:SetAttribute(attrs.RightFoulPole, resolved.inputs.rightFoulPole)
 	folder:SetAttribute(attrs.FirstBase, resolved.inputs.firstBase)
@@ -175,6 +178,14 @@ local function createLane(resolved: MarkerResolver.ResolvedLane, lanesFolder: Fo
 
 	record = { id = resolved.id, resolved = resolved, lane = lane, folder = folder }
 	return record
+end
+
+function PitchServer.selectBox(laneId: string, side: "Right" | "Left")
+	local record = assert(lanes[laneId], "unknown lane")
+	local geometry = require(Pitching.LaneGeometry).forBatter(record.resolved.geometry, side)
+	record.resolved.geometry = geometry
+	record.folder:SetAttribute(PitchNet.LaneAttributes.BatterGround, geometry.inputs.batterGround)
+	record.folder:SetAttribute(PitchNet.LaneAttributes.BatterSide, side)
 end
 
 function PitchServer.start()

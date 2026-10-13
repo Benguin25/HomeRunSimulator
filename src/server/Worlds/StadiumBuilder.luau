@@ -79,6 +79,21 @@ local function diamond(parent: Instance, frame: CFrame, markers: Instance, accen
 		)
 	)
 	-- Release remains derived by LaneGeometry.
+	for _, side in { "Right", "Left" } do
+		Build.marker(
+			markers,
+			`{side}Batter`,
+			frame:PointToWorldSpace(
+				Vector3.new(
+					(if side == "Right" then -1 else 1)
+						* PitchConfig.Geometry.BatterOffsetFromPlateMeters
+						/ PitchConfig.Units.MetersPerStud,
+					0,
+					0
+				)
+			)
+		)
+	end
 	Build.marker(markers, "FirstBase", frame:PointToWorldSpace(Vector3.new(base, 0, -base)))
 	Build.marker(markers, "ThirdBase", frame:PointToWorldSpace(Vector3.new(-base, 0, -base)))
 end

@@ -10,7 +10,7 @@
 
 local RunService = game:GetService("RunService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local SoundService = game:GetService("SoundService")
+local Audio = require(script.Parent.GameAudio)
 local Workspace = game:GetService("Workspace")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
@@ -29,12 +29,8 @@ type Effect = {
 	destroy: () -> (),
 }
 
-type SoundSpec = { Id: string, Volume: number, Speed: number }
-
 local folder: Folder
 local effects: { Effect } = {}
-local sounds: { [string]: Sound } = {}
-local lastPlayed: { [string]: number } = {}
 
 local function studs(meters: number): number
 	return meters / PitchConfig.Units.MetersPerStud
@@ -61,39 +57,8 @@ local function addEffect(effect: Effect)
 	table.insert(effects, effect)
 end
 
-local function soundFor(key: string): Sound?
-	local spec = (PresentationConfig.Sounds :: any)[key] :: SoundSpec?
-	if spec == nil or spec.Id == "" then
-		return nil
-	end
-	local existing = sounds[key]
-	if existing then
-		return existing
-	end
-	local sound = Instance.new("Sound")
-	sound.Name = `Hit{key}`
-	sound.SoundId = spec.Id
-	sound.Parent = SoundService
-	sounds[key] = sound
-	return sound
-end
-
--- Plays a configured sound (volume scaled by `gain`), at most once per MinGapSeconds.
 local function play(key: string, gain: number?)
-	local spec = (PresentationConfig.Sounds :: any)[key] :: SoundSpec?
-	local sound = soundFor(key)
-	if spec == nil or sound == nil then
-		return
-	end
-	local now = os.clock()
-	if now - (lastPlayed[key] or -math.huge) < PresentationConfig.Sounds.MinGapSeconds then
-		return
-	end
-	lastPlayed[key] = now
-	sound.Volume = spec.Volume * (gain or 1) * PresentationConfig.Sounds.MasterVolume
-	sound.PlaybackSpeed = spec.Speed
-	sound.TimePosition = 0
-	sound:Play()
+	Audio.play(key, gain)
 end
 
 local function spawnFlash(position: Vector3, diameter: number, seconds: number)
@@ -240,19 +205,7 @@ end
 
 -- Optional looping whoosh parented to the ball (destroyed with it).
 function HitEffects.attachWhoosh(ballPart: BasePart?)
-	local spec = PresentationConfig.Sounds.Whoosh
-	if ballPart == nil or spec.Id == "" then
-		return
-	end
-	local sound = Instance.new("Sound")
-	sound.Name = "Whoosh"
-	sound.SoundId = spec.Id
-	sound.Looped = true
-	sound.Volume = spec.Volume * PresentationConfig.Sounds.MasterVolume
-	sound.PlaybackSpeed = spec.Speed
-	sound.RollOffMaxDistance = 300
-	sound.Parent = ballPart
-	sound:Play()
+	Audio.attachWhoosh(ballPart)
 end
 
 local function onRender()

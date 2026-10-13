@@ -4,6 +4,7 @@ local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Data = require(Shared.Progression.PlayerProgression)
 local Replica = require(Shared.Progression.ProgressionReplica)
 local Controller = {}
+local Input = require(script.Parent.InputCoordinator)
 local state = Replica.new()
 local callbacks: { (Data.Snapshot) -> () } = {}
 local purchase: RemoteFunction
@@ -37,12 +38,14 @@ function Controller.power(): (number, number, number)
 end
 function Controller.openPanel(name: string)
 	panel, shopOpen = name, true
+	Input.menu("Progression", true)
 end
 function Controller.panel(): string
 	return panel
 end
 function Controller.setOpen(value: boolean)
 	shopOpen = value
+	Input.menu("Progression", value)
 end
 function Controller.isOpen(): boolean
 	return shopOpen

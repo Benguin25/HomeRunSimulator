@@ -79,6 +79,9 @@ function Server.release(player: Player, laneId: string)
 		lanes[laneId] = nil
 	end
 end
+function Server.publish(player: Player)
+	publish(player)
+end
 function Server.travelReady(player: Player, laneId: string): boolean
 	local lane = lanes[laneId]
 	return lane ~= nil and lane.player == player and Gate.canPitch(lane.gate) and alive(player)
@@ -93,12 +96,19 @@ function Server.character(player: Player, laneId: string, ready: boolean)
 end
 function Server.canPitch(laneId: string): boolean
 	local lane = lanes[laneId]
-	return lane ~= nil and ProgressionServer.ready(lane.player) and Gate.canPitch(lane.gate) and alive(lane.player)
+	return lane ~= nil
+		and lane.player:GetAttribute("BattingMode") == "Batting"
+		and lane.player:GetAttribute("BattingExitPending") ~= true
+		and ProgressionServer.ready(lane.player)
+		and Gate.canPitch(lane.gate)
+		and alive(lane.player)
 end
 function Server.canSwing(laneId: string, player: Player): boolean
 	local lane = lanes[laneId]
 	return lane ~= nil
 		and lane.player == player
+		and player:GetAttribute("BattingMode") == "Batting"
+		and player:GetAttribute("BattingExitPending") ~= true
 		and ProgressionServer.ready(player)
 		and Gate.canPitch(lane.gate)
 		and alive(player)

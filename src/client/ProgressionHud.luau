@@ -11,8 +11,8 @@ local Data = require(Shared.Progression.PlayerProgression)
 local Replica = require(Shared.Progression.ProgressionReplica)
 local Style = require(script.Parent.HudStyle)
 local Controller = require(script.Parent.ProgressionController)
-local Camera = require(script.Parent.BattingCamera)
 local Debug = require(script.Parent.PitchDebugView)
+local Audio = require(script.Parent.GameAudio)
 local Hud = {}
 local C = Style.Colors
 local gui: ScreenGui
@@ -112,6 +112,7 @@ local function button(parent: Instance, caption: string, x: number, y: number, w
 end
 local function updated(snapshot: Data.Snapshot)
 	if celebrated >= 0 and snapshot.rebirths > celebrated then
+		Audio.play("Rebirth")
 		toast.Text = string.format("REBORN! PERMANENT POWER %.2fx", snapshot.permanentMultiplier)
 		toastUntil = os.clock() + Config.Hud.RebirthNoticeSeconds
 		rebirthAt = os.clock()
@@ -158,7 +159,7 @@ local function render(dt: number)
 	end
 	rebirth.BackgroundColor3 =
 		C.panel:Lerp(C.gold, 0.22 * math.exp(-(os.clock() - rebirthAt) / Config.Hud.RebirthFlashSeconds))
-	if not Camera.isBattingView() or Debug.isVisible() then
+	if Debug.isVisible() then
 		Controller.setOpen(false)
 	end
 	local open = Controller.isOpen()
@@ -172,7 +173,7 @@ local function render(dt: number)
 	local shopY = math.min(16 + 94 * scale + 42, math.max(16, gui.AbsoluteSize.Y - 292 * scale - 16))
 	shop.Position = UDim2.fromOffset(16, shopY + 8 * (1 - alpha))
 	rebirth.Position = UDim2.fromOffset(16, math.min(shopY, math.max(16, gui.AbsoluteSize.Y - 360 * scale - 16)))
-	summary.Visible = not Debug.isVisible() and (view.X >= Config.Hud.CompactWidth or Camera.isBattingView())
+	summary.Visible = not Debug.isVisible()
 	toast.Position = UDim2.fromOffset(30, 22 + 94 * scale)
 	toast.Visible = summary.Visible and os.clock() < toastUntil
 	message.Visible = os.clock() < messageUntil
@@ -236,23 +237,19 @@ function Hud.start()
 	local openButton = button(summary, "POWER SHOP", 14, 63, 126, 23)
 	openButton.Name = "OpenShop"
 	openButton.Activated:Connect(function()
-		if Camera.isBattingView() then
-			if Controller.isOpen() and Controller.panel() == "Power" then
-				Controller.setOpen(false)
-			else
-				Controller.openPanel("Power")
-			end
+		if Controller.isOpen() and Controller.panel() == "Power" then
+			Controller.setOpen(false)
+		else
+			Controller.openPanel("Power")
 		end
 	end)
 	local openRebirth = button(summary, "REBIRTH", 154, 63, 118, 23)
 	openRebirth.Name = "OpenRebirth"
 	openRebirth.Activated:Connect(function()
-		if Camera.isBattingView() then
-			if Controller.isOpen() and Controller.panel() == "Rebirth" then
-				Controller.setOpen(false)
-			else
-				Controller.openPanel("Rebirth")
-			end
+		if Controller.isOpen() and Controller.panel() == "Rebirth" then
+			Controller.setOpen(false)
+		else
+			Controller.openPanel("Rebirth")
 		end
 	end)
 	shop = panel("PowerShop", 320, 292, UDim2.fromOffset(16, 166))
@@ -282,6 +279,7 @@ function Hud.start()
 			messageUntil = os.clock() + Config.Hud.NoticeSeconds
 			if result.ok then
 				purchaseAt = os.clock()
+				Audio.play("Upgrade")
 				message.Text = `POWER LEVEL {if value then value.powerLevel else 0} UNLOCKED!`
 			else
 				message.Text = if result.reason == "InsufficientCoins"
