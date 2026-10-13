@@ -31,42 +31,57 @@ local function pickSun(forward: Vector3): (number, number)
 	return bestTime, bestLat
 end
 
+-- Bake preview lighting is Edit presentation. Runtime restores the pre-bake base.
+local function original(inst: Instance, key: string): any
+	local value = inst:GetAttribute(`BakeOriginal_{key}`)
+	return if value == nil then (inst :: any)[key] else value
+end
+
 function Environment.start()
+	local previewGrade = Lighting:FindFirstChild("RookieBakeColorCorrectionEffect")
+	if previewGrade and previewGrade:IsA("ColorCorrectionEffect") then
+		previewGrade.Enabled = false
+	end
 	local atmosphere = Lighting:FindFirstChildOfClass("Atmosphere")
 	local bloom = Lighting:FindFirstChildOfClass("BloomEffect")
 	local rays = Lighting:FindFirstChildOfClass("SunRaysEffect")
 	local dof = Lighting:FindFirstChildOfClass("DepthOfFieldEffect")
 	local saved = {
-		ClockTime = Lighting.ClockTime,
-		GeographicLatitude = Lighting.GeographicLatitude,
-		Brightness = Lighting.Brightness,
-		Ambient = Lighting.Ambient,
-		OutdoorAmbient = Lighting.OutdoorAmbient,
-		FogStart = Lighting.FogStart,
-		FogEnd = Lighting.FogEnd,
-		FogColor = Lighting.FogColor,
-		ExposureCompensation = Lighting.ExposureCompensation,
-		EnvironmentDiffuseScale = Lighting.EnvironmentDiffuseScale,
-		EnvironmentSpecularScale = Lighting.EnvironmentSpecularScale,
-		ShadowSoftness = Lighting.ShadowSoftness,
+		ClockTime = original(Lighting, "ClockTime"),
+		GeographicLatitude = original(Lighting, "GeographicLatitude"),
+		Brightness = original(Lighting, "Brightness"),
+		Ambient = original(Lighting, "Ambient"),
+		OutdoorAmbient = original(Lighting, "OutdoorAmbient"),
+		FogStart = original(Lighting, "FogStart"),
+		FogEnd = original(Lighting, "FogEnd"),
+		FogColor = original(Lighting, "FogColor"),
+		ExposureCompensation = original(Lighting, "ExposureCompensation"),
+		EnvironmentDiffuseScale = original(Lighting, "EnvironmentDiffuseScale"),
+		EnvironmentSpecularScale = original(Lighting, "EnvironmentSpecularScale"),
+		ShadowSoftness = original(Lighting, "ShadowSoftness"),
 	}
 	local savedAtmosphere = atmosphere
 		and {
-			Density = atmosphere.Density,
-			Offset = atmosphere.Offset,
-			Color = atmosphere.Color,
-			Decay = atmosphere.Decay,
-			Glare = atmosphere.Glare,
-			Haze = atmosphere.Haze,
+			Density = original(atmosphere, "Density"),
+			Offset = original(atmosphere, "Offset"),
+			Color = original(atmosphere, "Color"),
+			Decay = original(atmosphere, "Decay"),
+			Glare = original(atmosphere, "Glare"),
+			Haze = original(atmosphere, "Haze"),
 		}
-	local savedBloom = bloom and { Intensity = bloom.Intensity, Size = bloom.Size, Threshold = bloom.Threshold }
-	local savedRays = rays and { Intensity = rays.Intensity, Spread = rays.Spread }
+	local savedBloom = bloom
+		and {
+			Intensity = original(bloom, "Intensity"),
+			Size = original(bloom, "Size"),
+			Threshold = original(bloom, "Threshold"),
+		}
+	local savedRays = rays and { Intensity = original(rays, "Intensity"), Spread = original(rays, "Spread") }
 	local savedDof = dof
 		and {
-			FarIntensity = dof.FarIntensity,
-			FocusDistance = dof.FocusDistance,
-			InFocusRadius = dof.InFocusRadius,
-			NearIntensity = dof.NearIntensity,
+			FarIntensity = original(dof, "FarIntensity"),
+			FocusDistance = original(dof, "FocusDistance"),
+			InFocusRadius = original(dof, "InFocusRadius"),
+			NearIntensity = original(dof, "NearIntensity"),
 		}
 	local grade = Instance.new("ColorCorrectionEffect")
 	grade.Name, grade.Parent = "WorldGrade", Lighting

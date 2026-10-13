@@ -1,13 +1,9 @@
 --!strict
--- Client-side Rookie environment (Stage 2).
+-- Rookie environment adapter: prefer verified Studio assets; runtime fallback remains available.
 --
--- Realizes the shared EnvironmentPlan locally, a few milliseconds per frame,
--- into Workspace.RookieEnvironment. Nothing here replicates or touches server
--- state: the authored Stadium, Baseplate and RookieCatchment are only made
--- invisible LOCALLY (their collision and the authoritative landing set are
--- unchanged), and the hidden authored bleachers stop blocking the local
--- character. Detail chunks are parented in and out by camera distance; the
--- whole folder is detached while the player is in another world.
+-- Baked mode binds replicated parts, local scoreboard/flags and streaming hooks.
+-- The legacy frame-budgeted generator is used only when no bake exists.
+-- Scenery stays outside server baseball collision roots in either mode.
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -31,110 +27,35 @@ type ChunkState = { chunk: Kit.Chunk, model: Model, visible: boolean }
 local started = false
 local folder: Folder? = nil
 local chunks: { ChunkState } = {}
-local tagged: { [string]: { BasePart } } = {}
 local labels: { [string]: TextLabel } = {}
 local flagBase: { [BasePart]: CFrame } = {}
 local flagCount = 0
 local built = false
 local hiddenOriginals = false
 
-local function color(c: Kit.Color): Color3
-	return Color3.fromRGB(c[1], c[2], c[3])
-end
+local Realizer = require(Shared.Environment.EnvironmentRealizer)
+local BakeLayout = require(Shared.Environment.BakeLayout)
+local baked = false
+local bakedSolids: { [BasePart]: boolean } = {}
 
-local materialCache: { [string]: Enum.Material } = {}
-local function material(name: string): Enum.Material
-	local m = materialCache[name]
-	if not m then
-		local ok, value = pcall(function()
-			return (Enum.Material :: any)[name]
-		end)
-		m = if ok and value then value else Enum.Material.SmoothPlastic
-		materialCache[name] = m
+local function bindPart(part: BasePart)
+	local tag = part:GetAttribute("EnvironmentTag")
+	if typeof(tag) ~= "string" then
+		return
 	end
-	return m :: Enum.Material
-end
-
-local function font(name: string?): Enum.Font
-	local ok, value = pcall(function()
-		return (Enum.Font :: any)[name or "GothamBlack"]
-	end)
-	return if ok and value then value else Enum.Font.GothamBlack
+	local label = part:FindFirstChildWhichIsA("TextLabel", true)
+	if label then
+		labels[tag] = label
+	end
+	if tag == "Flag" and not flagBase[part] and flagCount < Config.Motion.MaxAnimatedParts then
+		flagCount += 1
+		flagBase[part] = part.CFrame
+	end
 end
 
 local function realize(spec: Kit.Spec, parent: Instance): BasePart
-	local part: BasePart
-	if spec.shape == "Wedge" then
-		part = Instance.new("WedgePart")
-	else
-		local p = Instance.new("Part")
-		if spec.shape == "Cylinder" then
-			p.Shape = Enum.PartType.Cylinder
-		elseif spec.shape == "Ball" then
-			p.Shape = Enum.PartType.Ball
-		end
-		part = p
-	end
-	part.Anchored = true
-	part.CanCollide = spec.collide
-	part.CanQuery = spec.collide
-	part.CanTouch = false
-	part.CastShadow = spec.shadow
-	-- Parts are capped at 2,048 studs; very large ellipsoids (hills, massifs)
-	-- keep their shape by scaling the sphere mesh instead.
-	local meshScale = 1
-	if spec.shape == "Ellipsoid" then
-		meshScale = math.max(1, math.ceil(math.max(spec.size.X, spec.size.Y, spec.size.Z) / 2048))
-	end
-	part.Size = spec.size / meshScale
-	part.CFrame = spec.cf
-	part.Color = color(spec.color)
-	part.Material = material(spec.material)
-	part.Transparency = spec.transparency
-	part.Reflectance = spec.reflectance
-	part.TopSurface = Enum.SurfaceType.Smooth
-	part.BottomSurface = Enum.SurfaceType.Smooth
-	if spec.shape == "Ellipsoid" then
-		local mesh = Instance.new("SpecialMesh")
-		mesh.MeshType = Enum.MeshType.Sphere
-		mesh.Scale = Vector3.one * meshScale
-		mesh.Parent = part
-	end
-	local sign = spec.sign
-	if sign then
-		local face = sign.face or "Front"
-		local w = spec.size.X
-		local h = if face == "Top" then spec.size.Z else spec.size.Y
-		local gui = Instance.new("SurfaceGui")
-		gui.Face = (Enum.NormalId :: any)[face] or Enum.NormalId.Front
-		gui.SizingMode = Enum.SurfaceGuiSizingMode.FixedSize
-		gui.CanvasSize = Vector2.new(400, math.clamp(400 * h / math.max(w, 0.01), 40, 800))
-		gui.LightInfluence = 1
-		gui.Brightness = 1
-		local label = Instance.new("TextLabel")
-		label.Size = UDim2.fromScale(0.94, 0.86)
-		label.Position = UDim2.fromScale(0.03, 0.07)
-		label.BackgroundTransparency = 1
-		label.TextScaled = true
-		label.Font = font(sign.font)
-		label.TextColor3 = color(sign.color)
-		label.Text = sign.text
-		label.Parent = gui
-		gui.Parent = part
-		if spec.tag then
-			labels[spec.tag] = label
-		end
-	end
-	if spec.tag then
-		local list = tagged[spec.tag] or {}
-		table.insert(list, part)
-		tagged[spec.tag] = list
-		if spec.tag == "Flag" and flagCount < Config.Motion.MaxAnimatedParts then
-			flagCount += 1
-			flagBase[part] = spec.cf
-		end
-	end
-	part.Parent = parent
+	local part = Realizer.create(spec, parent)
+	bindPart(part)
 	return part
 end
 
@@ -257,6 +178,61 @@ local function inRookie(): boolean
 	return id == nil or id == WorldConfig.DefaultId
 end
 
+local function bakedVisibility(inst: Instance)
+	if inst:IsA("BasePart") then
+		if bakedSolids[inst] == nil then
+			bakedSolids[inst] = inst.CanCollide
+		end
+		inst.LocalTransparencyModifier = if inRookie() then 0 else 1
+		inst.CanCollide = inRookie() and bakedSolids[inst]
+	elseif inst:IsA("SurfaceGui") then
+		inst.Enabled = inRookie()
+	end
+end
+
+local function useBake(root: Folder)
+	baked, folder = true, root
+	for _, inst in root:GetDescendants() do
+		if inst:IsA("BasePart") then
+			bindPart(inst)
+		end
+		bakedVisibility(inst)
+	end
+	root.DescendantAdded:Connect(function(inst)
+		if inst:IsA("BasePart") then
+			bindPart(inst)
+		end
+		bakedVisibility(inst)
+		if inst:IsA("TextLabel") and inst.Parent and inst.Parent.Parent and inst.Parent.Parent:IsA("BasePart") then
+			bindPart(inst.Parent.Parent)
+			local snapshot = GameplayController.getSnapshot()
+			if snapshot then
+				task.defer(function()
+					Controller.refreshSnapshot(snapshot)
+				end)
+			end
+		end
+	end)
+	root.DescendantRemoving:Connect(function(inst)
+		if inst:IsA("BasePart") then
+			bakedSolids[inst] = nil
+			if flagBase[inst] then
+				flagBase[inst] = nil
+				flagCount -= 1
+			end
+		elseif inst:IsA("TextLabel") then
+			for tag, label in labels do
+				if label == inst then
+					labels[tag] = nil
+				end
+			end
+		end
+	end)
+	Players.LocalPlayer:SetAttribute("EnvironmentSource", "Baked")
+	hideOriginals()
+	built = true
+end
+
 local function chunkVisible(state: ChunkState, cameraPos: Vector3): boolean
 	local lod = state.chunk.lod
 	if lod <= 0 then
@@ -305,7 +281,9 @@ local function onSnapshot(snapshot: any)
 	setLabel("ScoreboardLongest", `LONGEST  {feet(stats.longestMeters)}`)
 	setLabel(
 		"ScoreboardExit",
-		`TOP EV  {if stats.highestExitMph and stats.highestExitMph > 0 then `{math.floor(stats.highestExitMph + 0.5)} MPH` else "---"}`
+		`TOP EV  {if stats.highestExitMph and stats.highestExitMph > 0
+			then `{math.floor(stats.highestExitMph + 0.5)} MPH`
+			else "---"}`
 	)
 	if result and result.hitId ~= lastSeenHit then
 		lastSeenHit = result.hitId
@@ -326,6 +304,8 @@ local function onSnapshot(snapshot: any)
 		setLabel("ScoreboardMessage", message)
 	end
 end
+
+Controller.refreshSnapshot = onSnapshot
 
 local function animate()
 	local t = os.clock()
@@ -364,6 +344,22 @@ local function ambience()
 end
 
 local function build()
+	local existing = Workspace:FindFirstChild(Config.FolderName)
+	if Config.Baked.Prefer and BakeLayout.isVerified(existing) then
+		useBake(existing :: Folder)
+		local snapshot = GameplayController.getSnapshot()
+		if snapshot then
+			onSnapshot(snapshot)
+		end
+		return
+	end
+	if existing then
+		warn(
+			"[Environment] Unverified environment occupies Workspace; refusing duplicate generation. Re-bake or rollback in Edit."
+		)
+		return
+	end
+	Players.LocalPlayer:SetAttribute("EnvironmentSource", "RuntimeFallback")
 	local plate, forward = siteFrame()
 	if not plate then
 		warn("[Environment] Rookie lane geometry unavailable; using measured site defaults.")
@@ -416,28 +412,84 @@ function Controller.isBuilt(): boolean
 end
 
 function Controller.start()
-	if started or not Config.Enabled then
+	if started then
 		return
 	end
 	started = true
+	if not Config.Enabled then
+		local root = Workspace:FindFirstChild(Config.FolderName)
+		if BakeLayout.isVerified(root) then
+			local function hide(inst: Instance)
+				if inst:IsA("BasePart") then
+					inst.LocalTransparencyModifier, inst.CanCollide = 1, false
+				elseif inst:IsA("SurfaceGui") then
+					inst.Enabled = false
+				end
+			end
+			for _, inst in (root :: Instance):GetDescendants() do
+				hide(inst)
+			end
+			(root :: Instance).DescendantAdded:Connect(hide)
+			for _, name in { "Stadium", "Baseplate" } do
+				local authored = Workspace:FindFirstChild(name)
+				if authored then
+					local all = authored:GetDescendants()
+					table.insert(all, authored)
+					for _, inst in all do
+						for attr, value in inst:GetAttributes() do
+							if string.sub(attr, 1, 13) == "BakeOriginal_" then
+								(inst :: any)[string.sub(attr, 14)] = value
+							end
+						end
+					end
+				end
+			end
+		end
+		Players.LocalPlayer:SetAttribute("EnvironmentSource", "AuthoredDisabled")
+		return
+	end
 	GameplayController.onSnapshot(onSnapshot)
 	Players.LocalPlayer:GetAttributeChangedSignal("CurrentWorld"):Connect(function()
 		local root = folder
 		if root then
-			root.Parent = if inRookie() then Workspace else nil
+			if baked then
+				for _, inst in root:GetDescendants() do
+					bakedVisibility(inst)
+				end
+			else
+				root.Parent = if inRookie() then Workspace else nil
+			end
 		end
 	end)
 	task.spawn(build)
 	ambience()
 	local acc = 0
+	local streamBusy = false
+	local lastStream = Vector3.new(math.huge, 0, 0)
 	RunService.Heartbeat:Connect(function(dt)
-		if not built or not folder or folder.Parent == nil then
+		if not built or not folder or folder.Parent == nil or (baked and not inRookie()) then
 			return
 		end
 		acc += dt
 		if acc >= Config.Build.LodCheckSeconds then
 			acc = 0
-			updateLod()
+			if not baked then
+				updateLod()
+			end
+		end
+		if baked and inRookie() and Workspace.StreamingEnabled and not streamBusy then
+			local camera = Workspace.CurrentCamera
+			if camera and (camera.CFrame.Position - lastStream).Magnitude >= Config.Baked.StreamMoveStuds then
+				streamBusy = true
+				lastStream = camera.CFrame.Position
+				task.spawn(function()
+					pcall(function()
+						Players.LocalPlayer:RequestStreamAroundAsync(lastStream, Config.Baked.StreamTimeoutSeconds)
+					end)
+					task.wait(Config.Baked.StreamIntervalSeconds)
+					streamBusy = false
+				end)
+			end
 		end
 		animate()
 	end)

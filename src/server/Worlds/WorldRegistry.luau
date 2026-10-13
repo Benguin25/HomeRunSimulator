@@ -6,6 +6,8 @@ local Config = require(Shared.Worlds.WorldConfig)
 local Geometry = require(Shared.Pitching.LaneGeometry)
 local Builder = require(script.Parent.StadiumBuilder)
 local Build = require(script.Parent.Construction)
+local EnvConfig = require(Shared.Environment.EnvironmentConfig)
+local BakeLayout = require(Shared.Environment.BakeLayout)
 local Registry = {}
 local laneWorld: { [string]: string } = {}
 local generated: Folder?
@@ -85,6 +87,13 @@ function Registry.rookieCatchment(geometry: Geometry.Geometry)
 	Build.ground(model, frame, -width, minX, minZ, maxZ, y, color, tile)
 	Build.ground(model, frame, maxX, width, minZ, maxZ, y, color, tile)
 	Build.ground(model, frame, -width, width, maxZ, math.max(maxZ + 50, Config.Rookie.BackStuds), y, color, tile)
+	if EnvConfig.Enabled and BakeLayout.isVerified(Workspace:FindFirstChild(EnvConfig.FolderName)) then
+		for _, part in model:GetDescendants() do
+			if part:IsA("BasePart") then
+				part.Transparency, part.CastShadow = 1, false
+			end
+		end
+	end
 	model.Parent = root
 end
 function Registry.collisionRoots(laneId: string): { Instance }
@@ -107,6 +116,19 @@ function Registry.collisionRoots(laneId: string): { Instance }
 	return roots
 end
 function Registry.visibility(player: Player, previous: string?, current: string)
+	local environment = Workspace:FindFirstChild(EnvConfig.FolderName)
+	if EnvConfig.Enabled and BakeLayout.isVerified(environment) then
+		for _, model in (environment :: Instance):GetDescendants() do
+			if model:IsA("Model") and model:GetAttribute("KeepForRookie") then
+				if previous == Config.DefaultId then
+					model:RemovePersistentPlayer(player)
+				end
+				if current == Config.DefaultId then
+					model:AddPersistentPlayer(player)
+				end
+			end
+		end
+	end
 	local interaction = generated and generated:FindFirstChild("RookieBattingInteractions")
 	if interaction and interaction:IsA("Model") then
 		if previous == Config.DefaultId then

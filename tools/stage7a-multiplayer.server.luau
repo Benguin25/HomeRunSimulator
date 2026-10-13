@@ -75,7 +75,10 @@ task.spawn(function()
 		end
 		local function seed(player, id, level, hitId)
 			local geo = Pitch.getGeometry(id)
-			local contact = assert(Helpers.swing(geo, Helpers.pitch(geo, 537), 0, -0.035, 0).contact, "seed contact")
+			local contact = assert(
+				Helpers.swing(geo, Helpers.pitch(geo, 537), 0, Helpers.skillAim(-0.035), 0).contact,
+				"seed contact"
+			)
 			local frame = Field.new(geo)
 			local launch = Ball.computeLaunch(
 				frame,
@@ -100,7 +103,7 @@ task.spawn(function()
 			Progression.resolve(player, hitId, outcome)
 		end
 		seed(power, "power/Lane1", 2, 1)
-		seed(sky, "sky/Lane1", 21, 1)
+		seed(sky, "sky/Lane1", 24, 1)
 		local powerBefore, skyBefore = Progression.snapshot(power), Progression.snapshot(sky)
 		local _, a = Batter.travel(power, "power", 1, "rookie")
 		assert(a.ok, a.reason)
@@ -138,7 +141,7 @@ task.spawn(function()
 		end, "Rookie contact")
 		local rookieActive = Pitch.getActivePitch("Lane1")
 		local rookieContact = assert(
-			Helpers.swing(Pitch.getGeometry("Lane1"), rookieActive.flight, 0, -0.035, 0).contact,
+			Helpers.swing(Pitch.getGeometry("Lane1"), rookieActive.flight, 0, Helpers.skillAim(-0.035), 0).contact,
 			"Rookie contact"
 		)
 		assert(Pitch.resolveContact("Lane1", rookieActive.data.id, rookieContact.contactTime, "BatContact"))
@@ -180,7 +183,8 @@ task.spawn(function()
 		end, "pitch to contact")
 		local active = Pitch.getActivePitch("power/Lane1")
 		local geo = Pitch.getGeometry("power/Lane1")
-		local contact = assert(Helpers.swing(geo, active.flight, 0, -0.035, 0).contact, "synthetic contact")
+		local contact =
+			assert(Helpers.swing(geo, active.flight, 0, Helpers.skillAim(-0.035), 0).contact, "synthetic contact")
 		assert(Pitch.resolveContact("power/Lane1", active.data.id, contact.contactTime, "BatContact"))
 		assert(Hits.launch("power/Lane1", active.data.id, power, contact), "authoritative launch")
 		local coinsBefore = Progression.snapshot(power).coins
@@ -225,7 +229,7 @@ task.spawn(function()
 		end, "second contact")
 		active = Pitch.getActivePitch("power/Lane1")
 		geo = Pitch.getGeometry("power/Lane1")
-		contact = assert(Helpers.swing(geo, active.flight, 0, -0.035, 0).contact, "second contact")
+		contact = assert(Helpers.swing(geo, active.flight, 0, Helpers.skillAim(-0.035), 0).contact, "second contact")
 		assert(Pitch.resolveContact("power/Lane1", active.data.id, contact.contactTime, "BatContact"))
 		assert(Hits.launch("power/Lane1", active.data.id, power, contact))
 		power:LoadCharacterAsync()

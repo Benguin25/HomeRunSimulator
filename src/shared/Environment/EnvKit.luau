@@ -2,7 +2,7 @@
 -- Pure part-spec emitter for environment builders.
 --
 -- Builders describe geometry as plain specs (shape, CFrame, size, color,
--- material, collision); `EnvironmentController` realizes them on the client.
+-- material, collision); EnvironmentRealizer realizes them in Studio or on the client.
 -- No Instances are created here, so a whole plan is deterministic and can be
 -- validated (budgets, collision flags, sightlines) in Lune tests.
 --

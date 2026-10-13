@@ -94,3 +94,12 @@ Build a satisfying arcade batting loop grounded in deterministic physics. Stages
 - `RegionMap` owns stable region/landmark IDs and feet/spray positions; builders read it. Future landing rewards must classify only server-confirmed, non-provisional impacts (`RegionMap.fromField`) and own deduplication/persistence. No rewards are implemented.
 - Scoreboard text uses only server-confirmed session snapshots for the local player; no new HUD surface. Ambience IDs stay empty until licensed assets exist.
 - Run `Environment.spec` (Lune) with all prior checks; keep the part budgets (40,000 total, 12,000 stadium). Visual quality needs Studio; `tools/environment-preview` renders are approximations and must not be presented as Studio verification.
+
+
+## Stage 2.1 permanent environment contract
+
+- Stage 2.1 supersedes Stage 2's client-only scenery rule for this explicit authoring conversion. EnvironmentBaker is Edit-only: reuse EnvironmentPlan/EnvironmentRealizer, preserve all design specs/regions, and insert bounded spatial leaf models. Workspace.RookieEnvironment is intentionally Studio-managed and never Rojo mapped.
+- Prefer only owned/versioned/verified baked assets. Retain runtime generation when no bake exists; refuse duplicates under an occupied unverified root. Preserve local scoreboard/flags, world visibility and lighting. Enabled=false restores authored local presentation; Baker.rollback archives scenery/restores Edit properties.
+- Preserve Stadium/Baseplate/markers/authoritative landing geometry. Keep authored clones/previous versions under ServerStorage.RookieEnvironmentBackup and record original visual properties. Hidden benches lose character collision only locally; server baseball collision remains unchanged. Scenery never enters WorldCollision roots.
+- Preserve StreamingEnabled. Pin only park/horizon for Rookie players; town/corridor uses Atomic spatial streaming and guarded camera requests. Instance counts do not establish guaranteed streaming or hardware performance.
+- Bake tools never save/publish. Save separate local artifacts after verification; never overwrite/publish the original cloud place without explicit authorization. Remove temporary fixtures/probes/export modules. Current Stage 7A mock qualification uses skill-relative aim and Power 24 for Sky with the arcade lift.
