@@ -12,9 +12,22 @@ end
 function Rules.level(value: any): boolean
 	return Rules.finite(value) and value >= 0 and value <= Config.Power.MaxLevel and value % 1 == 0
 end
-function Rules.multiplier(level: number): number
+function Rules.rebirthCount(value: any): boolean
+	return Rules.finite(value) and value % 1 == 0 and value >= 0 and value <= Config.Rebirth.MaxRebirths
+end
+function Rules.permanentMultiplier(rebirths: number): number
+	assert(Rules.rebirthCount(rebirths), "invalid rebirth count")
+	return 1 + Config.Rebirth.BonusPerRebirth * rebirths
+end
+function Rules.rebirthRequirement(rebirths: number): number?
+	assert(Rules.rebirthCount(rebirths), "invalid rebirth count")
+	return if rebirths < Config.Rebirth.MaxRebirths
+		then Config.Rebirth.FirstLevel + Config.Rebirth.LevelsPerRebirth * rebirths
+		else nil
+end
+function Rules.multiplier(level: number, rebirths: number?): number
 	assert(Rules.level(level), "invalid power level")
-	return Config.Power.Growth ^ level
+	return Config.Power.Growth ^ level * Rules.permanentMultiplier(rebirths or 0)
 end
 function Rules.cost(level: number): number?
 	assert(Rules.level(level), "invalid power level")
@@ -25,8 +38,8 @@ end
 function Rules.nextBenefit(level: number): number?
 	return if level < Config.Power.MaxLevel then Rules.multiplier(level + 1) - Rules.multiplier(level) else nil
 end
-function Rules.impactConfig(level: number): Impact.Config
-	local multiplier = Rules.multiplier(level)
+function Rules.impactConfig(level: number, rebirths: number?): Impact.Config
+	local multiplier = Rules.multiplier(level, rebirths)
 	local power = table.clone(BallConfig.Power)
 	-- Extend the existing post-impulse velocity multiplier, preserving direction,
 	-- measured contact and spin. Level 0 is exactly the Stage 5A configuration.

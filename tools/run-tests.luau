@@ -74,7 +74,12 @@ end
 
 local function mount(dir: string, name: string, parent)
 	local initPath = `{dir}/init.luau`
-	local node = newNode(name, if fs.isFile(initPath) then "ModuleScript" else "Folder", parent, if fs.isFile(initPath) then initPath else nil)
+	local node = newNode(
+		name,
+		if fs.isFile(initPath) then "ModuleScript" else "Folder",
+		parent,
+		if fs.isFile(initPath) then initPath else nil
+	)
 	for _, entry in fs.readDir(dir) do
 		local path = `{dir}/{entry}`
 		if fs.isDir(path) then
@@ -125,9 +130,24 @@ local function requireNode(node)
 end
 
 local testNode = rawget(rawget(serverScriptService, "__children").Server, "__children").Tests
-if process.args[1] == "--balance" or process.args[1] == "--economy" or process.args[1] == "--worlds" then
-	local analysis = requireNode(if process.args[1] == "--worlds" then testNode.WorldProgressionAnalysis elseif process.args[1] == "--economy" then testNode.ProgressionAnalysis else testNode.BalanceAnalysis)
-	local report = analysis.run()
+if
+	process.args[1] == "--balance"
+	or process.args[1] == "--economy"
+	or process.args[1] == "--worlds"
+	or process.args[1] == "--rebirths"
+	or process.args[1] == "--rebirths-baseline"
+then
+	local analysis = requireNode(
+		if process.args[1] == "--rebirths" or process.args[1] == "--rebirths-baseline"
+			then testNode.RebirthAnalysis
+			elseif process.args[1] == "--worlds" then testNode.WorldProgressionAnalysis
+			elseif process.args[1] == "--economy" then testNode.ProgressionAnalysis
+			else testNode.BalanceAnalysis
+	)
+	local baselineStep = if process.args[1] == "--rebirths-baseline"
+		then requireNode(replicatedStorage.Shared.Progression.ProgressionConfig).RebirthBalance.BaselineLevelsPerRebirth
+		else nil
+	local report = analysis.run(nil, baselineStep)
 	local serde = require("@lune/serde")
 	local json = serde.encode("json", report, true)
 	if process.args[2] then

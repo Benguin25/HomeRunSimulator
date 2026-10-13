@@ -87,6 +87,16 @@ local function changed(state: State)
 	end
 end
 
+function Stats.restoreRecords(state: State, best: number, milestones: { [string]: boolean })
+	state.value.longestMeters = best
+	for _, feet in Config.Records.MilestonesFeet do
+		if milestones[tostring(feet)] then
+			state.reached[feet] = true
+		end
+	end
+	changed(state)
+end
+
 function Stats.pitch(state: State, laneId: string, pitchId: number): boolean
 	if pitchId <= (state.pitchIds[laneId] or 0) then
 		return false

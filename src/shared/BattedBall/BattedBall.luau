@@ -35,6 +35,7 @@ export type LaunchData = {
 	spin: Vector3, -- field frame, rad/s
 	powerLevel: number?, -- captured at accepted server contact; prediction metadata only
 	powerVersion: number?,
+	rebirths: number?,
 }
 
 export type Flight = {
@@ -159,7 +160,7 @@ end
 
 -- Server and clients: rebuild the full flight from launch data.
 function BattedBall.buildFlight(frame: FieldFrame.Frame, launch: LaunchData, flightConfig: FlightConfig?): Flight
-	if not flightConfig and launch.powerLevel and launch.powerLevel > 0 then
+	if not flightConfig and ((launch.powerLevel or 0) > 0 or (launch.rebirths or 0) > 0) then
 		local expanded = table.clone(BattedBallConfig.Flight)
 		expanded.MaxFlightSeconds = ProgressionConfig.Limits.MaxFlightSeconds
 		expanded.MaxHorizontalDistanceMeters = ProgressionConfig.Limits.MaxDistanceMeters
@@ -168,7 +169,8 @@ function BattedBall.buildFlight(frame: FieldFrame.Frame, launch: LaunchData, fli
 	local params = BattedBall.buildParams(launch.spin, flightConfig)
 	local x0, y0, z0 = FieldFrame.toField(frame, launch.position)
 	local v = launch.velocity
-	local trajectory = FlightPhysics.simulate(params, x0, y0, z0, v.X, v.Y, v.Z, BattedBall.simulateOptions(flightConfig))
+	local trajectory =
+		FlightPhysics.simulate(params, x0, y0, z0, v.X, v.Y, v.Z, BattedBall.simulateOptions(flightConfig))
 
 	local speed = v.Magnitude
 	local horizontal = math.sqrt(v.X * v.X + v.Z * v.Z)
@@ -238,6 +240,7 @@ function BattedBall.encode(launch: LaunchData, endTime: number): { any }
 		endTime,
 		launch.powerLevel or 0,
 		launch.powerVersion or 0,
+		launch.rebirths or 0,
 	}
 end
 
@@ -256,6 +259,7 @@ function BattedBall.decode(packet: any): (LaunchData?, number?)
 		spin = packet[8],
 		powerLevel = packet[10] or 0,
 		powerVersion = packet[11] or 0,
+		rebirths = packet[12] or 0,
 	}
 	if
 		typeof(launch.hitId) ~= "number"
@@ -276,6 +280,7 @@ function BattedBall.sameLaunch(a: LaunchData, b: LaunchData, tolerance: number?)
 	local tol = tolerance or 1e-4
 	return math.abs(a.launchTime - b.launchTime) < 1e-6
 		and (a.powerLevel or 0) == (b.powerLevel or 0)
+		and (a.rebirths or 0) == (b.rebirths or 0)
 		and (a.position - b.position).Magnitude < tol
 		and (a.velocity - b.velocity).Magnitude < tol
 		and (a.spin - b.spin).Magnitude < tol * 100

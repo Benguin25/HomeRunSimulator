@@ -18,6 +18,16 @@ local C = Style.Colors
 local gui: ScreenGui
 local summary: CanvasGroup
 local shop: CanvasGroup
+local rebirth: CanvasGroup
+local rebirthInfo: TextLabel
+local rebirthProgress: Frame
+local rebirthButton: TextButton
+local rebirthMessage: TextLabel
+local statusLabel: TextLabel
+local confirm = false
+local celebrated = -1
+local rebirthMessageUntil = 0
+local rebirthAt = -math.huge
 local balance: TextLabel
 local level: TextLabel
 local title: TextLabel
@@ -101,6 +111,14 @@ local function button(parent: Instance, caption: string, x: number, y: number, w
 	return b
 end
 local function updated(snapshot: Data.Snapshot)
+	if celebrated >= 0 and snapshot.rebirths > celebrated then
+		toast.Text = string.format("REBORN! PERMANENT POWER %.2fx", snapshot.permanentMultiplier)
+		toastUntil = os.clock() + Config.Hud.RebirthNoticeSeconds
+		rebirthAt = os.clock()
+		purchaseAt = os.clock()
+		confirm = false
+	end
+	celebrated = math.max(celebrated, snapshot.rebirths)
 	value = snapshot
 	Replica.apply(replica, snapshot)
 	balance.Text = `{number(snapshot.coins)} COINS`
@@ -117,7 +135,7 @@ local function updated(snapshot: Data.Snapshot)
 	cost.Text = if snapshot.nextCost then `{number(snapshot.nextCost)} COINS` else "MAX LEVEL"
 	shopBalance.Text = `BALANCE  {number(snapshot.coins)} COINS`
 	local award = Replica.award(replica)
-	if award and award.coins > 0 then
+	if award and award.coins > 0 and os.clock() - purchaseAt > 0.1 then
 		toast.Text = `+{number(award.coins)} COINS`
 		toastUntil = os.clock() + Config.Hud.NoticeSeconds
 	end
@@ -132,22 +150,35 @@ local function render(dt: number)
 	local elapsed = os.clock() - purchaseAt
 	local punch = if elapsed < 1 then 0.025 * math.exp(-elapsed * 7) * math.sin(elapsed * 18) else 0
 	for i, s in scales do
-		s.Scale = scale * (if i == 2 then 1 + punch else 1)
+		local rebirthElapsed = os.clock() - rebirthAt
+		local rebirthPulse = if rebirthElapsed < 1
+			then Config.Hud.RebirthPulseScale * math.exp(-rebirthElapsed * 7) * math.sin(rebirthElapsed * 18)
+			else 0
+		s.Scale = scale * (if i == 2 then 1 + punch elseif i == 3 then 1 + rebirthPulse else 1)
 	end
+	rebirth.BackgroundColor3 =
+		C.panel:Lerp(C.gold, 0.22 * math.exp(-(os.clock() - rebirthAt) / Config.Hud.RebirthFlashSeconds))
 	if not Camera.isBattingView() or Debug.isVisible() then
 		Controller.setOpen(false)
 	end
 	local open = Controller.isOpen()
 	alpha += ((if open then 1 else 0) - alpha) * (1 - math.exp(-dt / 0.07))
-	shop.Visible, shop.GroupTransparency = alpha > 0.01, 1 - alpha
+	local rebirthOpen = open and Controller.panel() == "Rebirth"
+	shop.Visible, shop.GroupTransparency = alpha > 0.01 and not rebirthOpen, 1 - alpha
+	rebirth.Visible, rebirth.GroupTransparency = rebirthOpen, 1 - alpha
+	if not rebirthOpen then
+		confirm = false
+	end
 	local shopY = math.min(16 + 94 * scale + 42, math.max(16, gui.AbsoluteSize.Y - 292 * scale - 16))
 	shop.Position = UDim2.fromOffset(16, shopY + 8 * (1 - alpha))
+	rebirth.Position = UDim2.fromOffset(16, math.min(shopY, math.max(16, gui.AbsoluteSize.Y - 360 * scale - 16)))
 	summary.Visible = not Debug.isVisible() and (view.X >= Config.Hud.CompactWidth or Camera.isBattingView())
 	toast.Position = UDim2.fromOffset(30, 22 + 94 * scale)
 	toast.Visible = summary.Visible and os.clock() < toastUntil
 	message.Visible = os.clock() < messageUntil
 	local v = value
-	local afford = v ~= nil and v.nextCost ~= nil and v.coins >= (v.nextCost or math.huge)
+	local ready = Players.LocalPlayer:GetAttribute("ProfileState") == "Ready"
+	local afford = ready and v ~= nil and v.nextCost ~= nil and v.coins >= (v.nextCost or math.huge)
 	upgrade.BackgroundColor3 = if afford then C.gold else Color3.fromRGB(56, 63, 80)
 	upgrade.TextColor3 = if afford then C.panel else C.muted
 	upgrade.Text = if Controller.isPending()
@@ -157,6 +188,43 @@ local function render(dt: number)
 		elseif afford then "UPGRADE POWER"
 		else `NEED {number((v.nextCost or 0) - v.coins)} MORE COINS`
 	upgrade.Active = afford and not Controller.isPending()
+	local state = Players.LocalPlayer:GetAttribute("ProfileState")
+	statusLabel.Text = if state == "LoadFailed"
+		then tostring(
+			Players.LocalPlayer:GetAttribute("ProfileLoadMessage") or "Progress couldn't load. Please rejoin."
+		)
+		elseif state == "Lost" then "Progression paused: session ownership expired. Please rejoin."
+		elseif state == "SaveDelayed" then "Temporary saving issue. Progression paused while reconnecting."
+		elseif state ~= "Ready" then "Loading your progression..."
+		elseif Players.LocalPlayer:GetAttribute("ProfileMock") then "STUDIO MOCK: development session only"
+		else ""
+	statusLabel.Visible = statusLabel.Text ~= ""
+	statusLabel.Size = UDim2.fromOffset(math.max(200, math.min(600, view.X - 32)), 48)
+	statusLabel.Position = UDim2.fromOffset(16, math.max(0, gui.AbsoluteSize.Y - 56))
+	if v then
+		local required = v.rebirthRequirement
+		local eligible = ready and required ~= nil and v.powerLevel >= (required or math.huge)
+		rebirthInfo.Text = string.format(
+			"Rebirths  %d\nPermanent bonus  %.2fx\nNext bonus  %s\nPower  Level %d / %s",
+			v.rebirths,
+			v.permanentMultiplier,
+			if v.nextRebirthMultiplier then string.format("%.2fx", v.nextRebirthMultiplier) else "MAX",
+			v.powerLevel,
+			if required then tostring(required) else "MAX"
+		)
+		rebirthProgress.Size = UDim2.fromScale(if required then math.clamp(v.powerLevel / required, 0, 1) else 1, 1)
+		rebirthButton.Text = if Controller.isPending()
+			then "REBIRTHING..."
+			elseif not required then "MAX REBIRTHS"
+			elseif not ready then "PROGRESSION UNAVAILABLE"
+			elseif confirm then "CONFIRM: RESET COINS & POWER"
+			elseif eligible then "REBIRTH"
+			else `LOCKED - NEED LEVEL {required}`
+		rebirthButton.Active = eligible and not Controller.isPending()
+		rebirthButton.BackgroundColor3 = if eligible then C.gold else Color3.fromRGB(56, 63, 80)
+		rebirthButton.TextColor3 = if eligible then C.panel else C.muted
+	end
+	rebirthMessage.Visible = os.clock() < rebirthMessageUntil
 end
 function Hud.start()
 	gui = Instance.new("ScreenGui")
@@ -169,10 +237,24 @@ function Hud.start()
 	openButton.Name = "OpenShop"
 	openButton.Activated:Connect(function()
 		if Camera.isBattingView() then
-			Controller.setOpen(not Controller.isOpen())
+			if Controller.isOpen() and Controller.panel() == "Power" then
+				Controller.setOpen(false)
+			else
+				Controller.openPanel("Power")
+			end
 		end
 	end)
-	label(summary, "SESSION ONLY", 154, 65, 120, 18, 10, C.muted)
+	local openRebirth = button(summary, "REBIRTH", 154, 63, 118, 23)
+	openRebirth.Name = "OpenRebirth"
+	openRebirth.Activated:Connect(function()
+		if Camera.isBattingView() then
+			if Controller.isOpen() and Controller.panel() == "Rebirth" then
+				Controller.setOpen(false)
+			else
+				Controller.openPanel("Rebirth")
+			end
+		end
+	end)
 	shop = panel("PowerShop", 320, 292, UDim2.fromOffset(16, 166))
 	shop.Visible, shop.GroupTransparency = false, 1
 	title = label(shop, "POWER — LEVEL 0", 18, 16, 255, 24, 18, C.gold)
@@ -211,7 +293,68 @@ function Hud.start()
 		end)
 	end)
 	toast = label(gui, "", 30, 120, 280, 28, 18, C.gold)
+	toast.Size = UDim2.fromOffset(390, 28)
 	toast.Visible, toast.Font = false, Enum.Font.GothamBold
+	rebirth = panel("Rebirth", 340, 360, UDim2.fromOffset(16, 166))
+	rebirth.Visible = false
+	label(rebirth, "REBIRTH", 18, 16, 260, 28, 22, C.gold).Font = Enum.Font.GothamBlack
+	local closeRebirth = button(rebirth, "X", 300, 16, 24, 24)
+	closeRebirth.Activated:Connect(function()
+		Controller.setOpen(false)
+	end)
+	rebirthInfo = label(rebirth, "Loading...", 18, 58, 304, 110, 16, C.text)
+	rebirthInfo.TextYAlignment = Enum.TextYAlignment.Top
+	local bar = Instance.new("Frame")
+	bar.Position, bar.Size, bar.BackgroundColor3, bar.BorderSizePixel =
+		UDim2.fromOffset(18, 176), UDim2.fromOffset(304, 8), C.muted, 0
+	bar.Parent = rebirth
+	Style.corner(bar, 4)
+	rebirthProgress = Instance.new("Frame")
+	rebirthProgress.Size, rebirthProgress.BackgroundColor3, rebirthProgress.BorderSizePixel, rebirthProgress.Parent =
+		UDim2.fromScale(0, 1), C.gold, 0, bar
+	Style.corner(rebirthProgress, 4)
+	local explanation = label(
+		rebirth,
+		"Coins and purchased Power reset to 0.\nKeep permanent bonuses, worlds, records\nand lifetime milestones. Build strength again!",
+		18,
+		200,
+		304,
+		65,
+		12,
+		C.muted
+	)
+	explanation.TextWrapped = true
+	rebirthButton = button(rebirth, "LOADING...", 18, 278, 304, 40)
+	rebirthButton.Name = "ConfirmRebirth"
+	rebirthMessage = label(rebirth, "", 18, 324, 304, 22, 11, C.gold)
+	rebirthButton.Activated:Connect(function()
+		local v = value
+		if
+			not rebirth.Visible
+			or not v
+			or not v.rebirthRequirement
+			or v.powerLevel < v.rebirthRequirement
+			or Controller.isPending()
+		then
+			return
+		end
+		if not confirm then
+			confirm = true
+			return
+		end
+		confirm = false
+		Controller.rebirth(function(result)
+			rebirthMessageUntil = os.clock() + 3
+			rebirthMessage.Text = if result.ok
+				then "Permanent bonus unlocked!"
+				elseif result.reason == "FinishHitFirst" then "Wait for the current hit to finish."
+				elseif result.reason == "StaleProgression" then "Progress changed. Review and confirm again."
+				elseif result.reason == "DataUnavailable" then "Saving unavailable. Please wait."
+				else "Rebirth unavailable. Review and try again."
+		end)
+	end)
+	statusLabel = label(gui, "Loading your progression...", 16, 600, 600, 48, 13, C.gold)
+	statusLabel.TextWrapped = true
 	gui.Parent = Players.LocalPlayer:WaitForChild("PlayerGui")
 	Controller.onSnapshot(updated)
 	Input.InputBegan:Connect(function(input)

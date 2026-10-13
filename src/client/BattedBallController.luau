@@ -137,14 +137,15 @@ function BattedBallController.predict(laneId: string, pitchId: number, contact: 
 	if not frame then
 		return
 	end
-	local powerLevel, powerVersion = ProgressionController.power()
+	local powerLevel, powerVersion, rebirths = ProgressionController.power()
 	local launch, impact = BattedBall.computeLaunch(frame, contact, {
 		hitId = 0,
 		laneId = laneId,
 		pitchId = pitchId,
 		userId = localPlayer.UserId,
-	}, ProgressionRules.impactConfig(powerLevel))
+	}, ProgressionRules.impactConfig(powerLevel, rebirths))
 	launch.powerLevel, launch.powerVersion = powerLevel, powerVersion
+	launch.rebirths = rebirths
 	local entry = newEntry(launch, frame, true, nil)
 	entry.impact = impact
 	entry.contactType = BattedBall.describeContact(frame, contact, impact)

@@ -93,11 +93,15 @@ function Server.character(player: Player, laneId: string, ready: boolean)
 end
 function Server.canPitch(laneId: string): boolean
 	local lane = lanes[laneId]
-	return lane ~= nil and Gate.canPitch(lane.gate) and alive(lane.player)
+	return lane ~= nil and ProgressionServer.ready(lane.player) and Gate.canPitch(lane.gate) and alive(lane.player)
 end
 function Server.canSwing(laneId: string, player: Player): boolean
 	local lane = lanes[laneId]
-	return lane ~= nil and lane.player == player and Gate.canPitch(lane.gate) and alive(player)
+	return lane ~= nil
+		and lane.player == player
+		and ProgressionServer.ready(player)
+		and Gate.canPitch(lane.gate)
+		and alive(player)
 end
 function Server.canFinish(laneId: string, hitId: number): boolean
 	local lane = lanes[laneId]
@@ -212,6 +216,22 @@ function Server.start()
 	end)
 	local function added(player: Player)
 		players[player] = { stats = Stats.new(), version = 0, rejection = "", lastRequest = -math.huge }
+		local restored = false
+		local connection: RBXScriptConnection?
+		local function restore()
+			local records = ProgressionServer.records(player)
+			local state = players[player]
+			if records and state and not restored then
+				restored = true
+				Stats.restoreRecords(state.stats, records.bestMeters, records.milestones)
+				publish(player)
+				if connection then
+					connection:Disconnect()
+				end
+			end
+		end
+		connection = player:GetAttributeChangedSignal("ProfileState"):Connect(restore)
+		restore()
 	end
 	Players.PlayerAdded:Connect(added)
 	Players.PlayerRemoving:Connect(function(player)

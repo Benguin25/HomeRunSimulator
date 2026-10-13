@@ -1,5 +1,5 @@
 --!strict
--- Session-only gameplay loop. No currency, persistence or power progression.
+-- Session pacing/statistics; permanent progression is owned by PlayerProgression.
 return {
 	Pacing = {
 		LandingHoldSeconds = 0.65,

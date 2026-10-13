@@ -141,7 +141,12 @@ local function getLane(laneId: string): LaneHits?
 		onResolved = function(_, hit)
 			GameplayServer.resolve(laneId, hit.launch.hitId, LandingDetector.toPayload(hit.outcome))
 			setHitState(laneId, "Resolved")
-			event:FireAllClients(BattedBallNet.Messages.Resolved, hit.launch.hitId, laneId, LandingDetector.toPayload(hit.outcome))
+			event:FireAllClients(
+				BattedBallNet.Messages.Resolved,
+				hit.launch.hitId,
+				laneId,
+				LandingDetector.toPayload(hit.outcome)
+			)
 			log(hit)
 		end,
 		onFinished = function(_, hit)
@@ -173,7 +178,15 @@ end
 
 -- Starts the authoritative flight for a validated contact. Returns the hit
 -- id, or nil if the lane is unknown or already has a ball in the air.
-function BattedBallServer.launch(laneId: string, pitchId: number, player: Player, contact: ContactQuality.ContactResult): number?
+function BattedBallServer.launch(
+	laneId: string,
+	pitchId: number,
+	player: Player,
+	contact: ContactQuality.ContactResult
+): number?
+	if not ProgressionServer.ready(player) then
+		return nil
+	end
 	local lane = getLane(laneId)
 	if not lane then
 		return nil
@@ -185,15 +198,16 @@ function BattedBallServer.launch(laneId: string, pitchId: number, player: Player
 	nextHitId += 1
 	local hitId = nextHitId
 	-- Capture current authority at accepted contact, regardless of pitch age.
-	local powerLevel, powerVersion = ProgressionServer.power(player)
+	local powerLevel, powerVersion, rebirths = ProgressionServer.power(player)
 
 	local launch, impact = BattedBall.computeLaunch(lane.frame, contact, {
 		hitId = hitId,
 		laneId = laneId,
 		pitchId = pitchId,
 		userId = player.UserId,
-	}, ProgressionRules.impactConfig(powerLevel))
+	}, ProgressionRules.impactConfig(powerLevel, rebirths))
 	launch.powerLevel, launch.powerVersion = powerLevel, powerVersion
+	launch.rebirths = rebirths
 	local t0 = os.clock()
 	local flight = BattedBall.buildFlight(lane.frame, launch)
 	local t1 = os.clock()

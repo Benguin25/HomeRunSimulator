@@ -117,6 +117,9 @@ local function assignLane(player: Player, laneId: string)
 end
 
 local function tryAssign(player: Player): boolean
+	if not ProgressionServer.ready(player) then
+		return false
+	end
 	local laneId =
 		Selection.free(PitchServer.getLaneIds(), laneBatter, Worlds.worldForLane, ProgressionServer.world(player))
 	if not laneId then
@@ -139,6 +142,13 @@ local function drainWaiting()
 end
 local function onPlayerAdded(player: Player)
 	playerConnections[player] = {
+		player:GetAttributeChangedSignal("ProfileState"):Connect(function()
+			if ProgressionServer.ready(player) and not getLaneOf(player) then
+				player:SetAttribute("CurrentWorld", ProgressionServer.world(player))
+				Worlds.visibility(player, nil, ProgressionServer.world(player))
+				drainWaiting()
+			end
+		end),
 		player.CharacterAdded:Connect(function(character)
 			onCharacterAdded(player, character)
 		end),

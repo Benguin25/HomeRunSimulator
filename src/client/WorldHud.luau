@@ -4,6 +4,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 local TweenService = game:GetService("TweenService")
 local Input = game:GetService("UserInputService")
+local GuiService = game:GetService("GuiService")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Config = require(Shared.Worlds.WorldConfig)
 local Data = require(Shared.Progression.PlayerProgression)
@@ -180,8 +181,7 @@ function Hud.start()
 		value = snapshot
 		local world = Config.get(snapshot.worlds.currentWorld)
 		current.Text = if world then string.upper(world.name) else "STADIUM"
-		best.Text =
-			string.format("CONFIRMED BEST  %.0f FT  /  SESSION ONLY", snapshot.worlds.qualifyingBestMeters / 0.3048)
+		best.Text = string.format("ALL-TIME CONFIRMED BEST  %.0f FT", snapshot.worlds.qualifyingBestMeters / 0.3048)
 		local notice = snapshot.worldUnlock
 		if notice and notice.hitId > unlockedHit then
 			unlockedHit = notice.hitId
@@ -232,7 +232,9 @@ function Hud.start()
 			ProgressionConfig.Hud.MinScale,
 			ProgressionConfig.Hud.MaxScale
 		)
-		open.Position = UDim2.fromOffset(16, 22 + 94 * hudScale + 34)
+		-- This GUI uses DeviceSafeInsets; progression respects the CoreGui inset.
+		local topInset = GuiService:GetGuiInset().Y
+		open.Position = UDim2.fromOffset(16, topInset + 22 + 94 * hudScale + 34)
 		if Debug.isVisible() or Progression.isOpen() then
 			Controller.setOpen(false)
 		end
@@ -243,7 +245,7 @@ function Hud.start()
 			and not panel.Visible
 		current.AnchorPoint = if size.X < 700 then Vector2.zero else Vector2.new(0.5, 0)
 		current.Position = if size.X < 700
-			then UDim2.fromOffset(152, 26 + 94 * hudScale + 34)
+			then UDim2.fromOffset(152, topInset + 26 + 94 * hudScale + 34)
 			else UDim2.new(0.5, 0, 0, 10)
 		current.Size = UDim2.fromOffset(if size.X < 700 then math.max(100, size.X - 166) else 250, 22)
 		current.TextSize = if size.X < 700 then 10 else 12
