@@ -4,6 +4,7 @@ local Data = require(ReplicatedStorage:WaitForChild("Shared").Progression.Player
 local Progression = require(script.Parent.ProgressionController)
 local Controller = {}
 local Input = require(script.Parent.InputCoordinator)
+local Loading = require(script.Parent.LoadingController)
 local opened, pending, started = false, false, false
 local travel: RemoteFunction
 local sequence = 0
@@ -30,10 +31,16 @@ function Controller.go(worldId: string, callback: (boolean, string) -> ())
 	sequence += 1
 	local seq, current = sequence, value.worlds.currentWorld
 	task.spawn(function()
+		if not Loading.prepareTravel(worldId) then
+			pending = false
+			callback(false, "Loading")
+			return
+		end
 		local ok, response, result = pcall(function()
 			return travel:InvokeServer(worldId, seq, current)
 		end)
 		pending = false
+		Loading.travelResult(ok and response ~= nil and result ~= nil and result.ok == true)
 		if ok and response and result then
 			Progression.accept(response)
 			if result.ok then

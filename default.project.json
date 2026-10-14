@@ -3,6 +3,14 @@
   "tree": {
     "$className": "DataModel",
 
+    "ReplicatedFirst": {
+      "Loading": {
+        "$path": "src/first",
+        "LoadingConfig": {
+          "$path": "src/shared/Presentation/LoadingConfig.luau"
+        }
+      }
+    },
     "ReplicatedStorage": {
       "Shared": {
         "$path": "src/shared"

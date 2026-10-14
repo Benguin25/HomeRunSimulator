@@ -109,13 +109,15 @@ Post-MVP visual/audio polish is not a release blocker. Remaining multiplayer str
 - [ ] Apply supported Studio network emulation for representative 100–250 ms latency and packet loss; repeat swings/skips/menu closures/travel/purchases/rebirths. Inspect stale/replayed requests and prediction correction. No latency-emulated run was performed in this audit.
 - [ ] Run simultaneous high-Power flights and a streaming/memory soak on target desktop hardware. Local three-client success is not public-server load certification.
 
-To rerun the fixture, install `tools/stage7a-multiplayer.server.luau` temporarily as a Script under ServerScriptService in Edit, ensure Mock/New, then use the Edit Command Bar:
+To rerun the fixture, install `tools/stage7a-multiplayer.server.luau` temporarily as a Script under ServerScriptService in Edit and, while LoadingConfig.Enabled is true, install `tools/stage7a-loading.client.luau` as a LocalScript under StarterPlayerScripts. Ensure Mock/New, then use the Edit Command Bar:
 
 ```lua
 return game:GetService("StudioTestService"):ExecuteMultiplayerTestAsync(3, "Stage7ABatting")
 ```
 
-Inspect the returned `ok`/error and remove the Script afterward. Never map or publish it. Stage 6B's preserved fixture assumes obsolete FIFO/automatic assignment and is not the current gameplay regression.
+Inspect the returned `ok`/error and remove both temporary scripts and probe attributes afterward. Never map or publish them. The loading companion waits for enabled Play, uses the production UI command, and verifies automatic stadium-travel reveal. Stage 6B's preserved fixture assumes obsolete FIFO/automatic assignment and is not the current gameplay regression.
+
+The October 13 manual Play correction passed 343 Studio specs. The updated three-client fixture also passed with normal loading enabled; its companion requires explicit Play for both full-ready and capped joins, and automatic travel; it does not call capped entry full rendering. The 30-second budget deliberately permits remaining scenery to load afterward and supersedes the preceding long render-warmup policy. See README for measured timing and remaining hardware/client checks.
 
 ### Real persistence: safe exact procedure
 

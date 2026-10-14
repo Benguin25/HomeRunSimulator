@@ -4,7 +4,8 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 
-local PitchConfig = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Pitching"):WaitForChild("PitchConfig"))
+local PitchConfig =
+	require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Pitching"):WaitForChild("PitchConfig"))
 
 local BattedBallServer = require(script.BattedBallServer)
 local BatterService = require(script.BatterService)
@@ -32,3 +33,4 @@ PitchServer.start()
 BattedBallServer.start()
 BattingServer.start()
 BatterService.start()
+require(script.LoadingManifest).start()

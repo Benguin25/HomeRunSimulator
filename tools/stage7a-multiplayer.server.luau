@@ -16,6 +16,24 @@ task.spawn(function()
 			persistence.StudioMode == "Mock" and persistence.StudioMockScenario == "New",
 			"Stage7A fixture requires Mock/New; never seed DataStore profiles"
 		)
+		local loading = require(Shared.Presentation.LoadingConfig).Enabled
+		if loading then
+			local probe = Instance.new("RemoteEvent")
+			probe.Name, probe.Parent = "Stage7ALoadingProbe", game.ReplicatedStorage
+			probe.OnServerEvent:Connect(function(player, report)
+				if type(report) == "table" and type(report.diagnostic) == "string" then
+					player:SetAttribute("Stage7ALoadingDiagnostic", report.diagnostic)
+				end
+				if
+					type(report) == "table"
+					and report.entered
+					and report.hidden
+					and (not report.playVisible or report.world == "rookie")
+				then
+					player:SetAttribute("Stage7ALoadingWorld", report.world)
+				end
+			end)
+		end
 		local Batter = require(server.BatterService)
 		local Pitch = require(server.PitchServer)
 		local Gameplay = require(server.GameplayServer)
@@ -28,7 +46,7 @@ task.spawn(function()
 		local Rules = require(Shared.Progression.ProgressionRules)
 		local Helpers = require(server.Tests.BattedBallTestUtil)
 		local Collision = require(server.Worlds.WorldCollision)
-		local deadline = os.clock() + 150
+		local deadline = os.clock() + 220
 		local function waitFor(predicate, label)
 			repeat
 				if predicate() then
@@ -36,7 +54,11 @@ task.spawn(function()
 				end
 				task.wait(0.05)
 			until os.clock() > deadline
-			error("timeout: " .. label)
+			local diagnostics = {}
+			for _, p in Players:GetPlayers() do
+				table.insert(diagnostics, { name = p.Name, attributes = p:GetAttributes() })
+			end
+			error("timeout: " .. label .. " " .. game:GetService("HttpService"):JSONEncode(diagnostics))
 		end
 		waitFor(function()
 			if
@@ -49,6 +71,7 @@ task.spawn(function()
 			for _, p in Players:GetPlayers() do
 				if
 					not Progression.ready(p)
+					or (loading and p:GetAttribute("Stage7ALoadingWorld") ~= "rookie")
 					or not p.Character
 					or not p.Character:FindFirstChild("HumanoidRootPart")
 				then
@@ -117,6 +140,11 @@ task.spawn(function()
 			p.Character:PivotTo(CFrame.new(Geometry.boxGround(geo, side) + Vector3.new(0, 3, 0)))
 		end
 		local function enter(p, id, side)
+			if loading then
+				waitFor(function()
+					return p:GetAttribute("Stage7ALoadingWorld") == p:GetAttribute("CurrentWorld")
+				end, "loading finished " .. id)
+			end
 			approach(p, id, side)
 			local accepted, reason = Batter.enter(p, id, side)
 			assert(accepted, reason)
@@ -166,6 +194,11 @@ task.spawn(function()
 		task.wait(0.4)
 		local _, trip = Batter.travel(sky, "power", 2, "sky")
 		assert(trip.ok, trip.reason)
+		if loading then
+			waitFor(function()
+				return sky:GetAttribute("Stage7ALoadingWorld") == "power"
+			end, "Power travel opening view")
+		end
 		approach(sky, "power/Lane1", "Right")
 		local accepted, occupied = Batter.enter(sky, "power/Lane1", "Right")
 		assert(not accepted and occupied == "LaneOccupied", "opposite box same lane")

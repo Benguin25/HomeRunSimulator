@@ -7,6 +7,7 @@ local Prompts = game:GetService("ProximityPromptService")
 local Shared = game:GetService("ReplicatedStorage"):WaitForChild("Shared")
 local Policy = require(Shared.Presentation.InputMode)
 local Config = require(Shared.Gameplay.BattingModeConfig)
+local LoadingConfig = require(Shared.Presentation.LoadingConfig)
 local Coordinator = {}
 local state = Policy.new()
 local player = Players.LocalPlayer
@@ -45,6 +46,10 @@ function Coordinator.canSwing(): boolean
 	return true
 end
 function Coordinator.start()
+	Coordinator.menu("Loading", player:GetAttribute(LoadingConfig.ActiveAttribute) == true)
+	player:GetAttributeChangedSignal(LoadingConfig.ActiveAttribute):Connect(function()
+		Coordinator.menu("Loading", player:GetAttribute(LoadingConfig.ActiveAttribute) == true)
+	end)
 	player:GetAttributeChangedSignal(Config.ModeAttribute):Connect(refresh)
 	player:GetAttributeChangedSignal(Config.ExitAttribute):Connect(refresh)
 	GuiService.MenuOpened:Connect(function()

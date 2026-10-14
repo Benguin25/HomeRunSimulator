@@ -2,6 +2,7 @@
 -- Client entry point: pitch rendering, batting / hit camera, batting, batted
 -- balls, hit effects and HUD, and the (Studio) debug overlay.
 
+require(script.LoadingController).start()
 local BattedBallController = require(script.BattedBallController)
 local BattingCamera = require(script.BattingCamera)
 local BattingController = require(script.BattingController)
@@ -43,3 +44,4 @@ require(script.EnvironmentController).start()
 ProgressionHud.start()
 require(script.WorldHud).start()
 require(script.BattingModeController).start()
+game:GetService("Players").LocalPlayer:SetAttribute("LoadingClientReady", true)

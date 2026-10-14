@@ -11,6 +11,10 @@ local BakeLayout = require(Shared.Environment.BakeLayout)
 local Registry = {}
 local laneWorld: { [string]: string } = {}
 local generated: Folder?
+local visibilityCallbacks: { (Player, string?, string) -> () } = {}
+function Registry.onVisibility(callback: (Player, string?, string) -> ())
+	table.insert(visibilityCallbacks, callback)
+end
 function Registry.initialize(): Folder
 	if generated and generated.Parent then
 		return generated
@@ -151,6 +155,9 @@ function Registry.visibility(player: Player, previous: string?, current: string)
 		else Registry.model(current)
 	if nextModel and nextModel:IsA("Model") then
 		nextModel:AddPersistentPlayer(player)
+	end
+	for _, callback in visibilityCallbacks do
+		callback(player, previous, current)
 	end
 end
 return Registry

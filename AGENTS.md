@@ -13,6 +13,8 @@ Build a satisfying arcade batting loop grounded in deterministic physics. Stages
 
 ## Architecture and constraints
 
+- Loading presentation lives in ReplicatedFirst (`src/first`) with shared LoadingConfig, LoadingState, RenderSettler and client LoadingController. Joining always waits for an explicit Play click; readiness or the 30-second visual cap enables that button with remaining scenery allowed to load afterward. Include the automatic travel fade in that budget; never bypass profile/client/character/destination readiness or replay a pending travel request. Percentages represent waiting-budget presentation, not fully rendered asset counts. Tutorial stays disabled, travel reveals automatically and respawns stay in free roam. Retain the opening set for the current world, release on departure/disconnect, and acknowledge visual completion only for fully ready entry. Loading acknowledgments have no gameplay authority. The temporary Stage 7A companion requires manual Play for ready or capped joining; remove both fixtures and restore any test-only configuration afterward.
+
 - Rojo maps `src/shared`, `src/server`, and `src/client`. Preserve `default.project.json` and Studio-managed `Workspace.Stadium` assets unless the task requires a change.
 - Pitching uses server-authoritative precomputed 240 Hz trajectories. Beginner pitches are already 50–55 mph; preserve pitching speeds, solver, timing and replication.
 - `SwingModel` positions the sweet spot on the mouse aim plane and provides analytic bat poses. `BatCollision` sweeps two capsules using conservative advancement. Keep the rendered and collision poses identical.
